@@ -1,0 +1,66 @@
+version: "3.9"
+
+services:
+  opencode:
+    build:
+      context: .
+      dockerfile: Dockerfile.opencode
+    user: "opencode"
+    ports:
+      - "${OPENCODE_BIND_ADDRESS:-127.0.0.1}:${OPENCODE_SERVER_PORT:-4096}:${OPENCODE_SERVER_PORT:-4096}"
+      - "${OPENCODE_BIND_ADDRESS:-127.0.0.1}:${OPENCODE_AUX_SERVER_PORT:-1455}:1455"
+    expose:
+      - "${OPENCODE_SERVER_PORT:-4096}"
+      - "1455"
+    environment:
+      OPENCODE_SERVER_PORT: ${OPENCODE_SERVER_PORT:-4096}
+      OPENCODE_HOST: ${OPENCODE_HOST:-0.0.0.0}
+      OPENCODE_DISABLE_AUTOUPDATE: ${OPENCODE_DISABLE_AUTOUPDATE:-true}
+    volumes:
+      - ./data/opencode/config:/home/opencode/.config/opencode
+      - ./data/opencode/share:/home/opencode/.local/share/opencode
+      - ./data/opencode/state:/home/opencode/.local/state/opencode
+      - ./data/opencode/cache:/home/opencode/.cache/opencode
+      - ./data/ssh:/home/opencode/.ssh
+      - ${HOST_PROJECTS_DIR:-./projects}:/workspace:delegated
+    healthcheck:
+      test: ["CMD", "node", "-e", "const net=require('net');const port=Number(process.env.OPENCODE_SERVER_PORT||4096);const socket=net.connect({host:'127.0.0.1',port},()=>{socket.end();process.exit(0)});socket.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),3000);"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  openchamber:
+    build:
+      context: .
+      dockerfile: Dockerfile.openchamber
+    user: "openchamber"
+    depends_on:
+      opencode:
+        condition: service_healthy
+    ports:
+      - "${OPENCHAMBER_BIND_ADDRESS:-127.0.0.1}:${OPENCHAMBER_PORT:-3000}:${OPENCHAMBER_PORT:-3000}"
+    environment:
+      OPENCHAMBER_PORT: ${OPENCHAMBER_PORT:-3000}
+      OPENCHAMBER_HOST: ${OPENCHAMBER_HOST:-0.0.0.0}
+      OPENCHAMBER_DATA_DIR: ${OPENCHAMBER_DATA_DIR:-/home/openchamber/.config/openchamber}
+      OPENCHAMBER_UI_PASSWORD: ${OPENCHAMBER_UI_PASSWORD:-}
+      OPENCODE_SKIP_START: ${OPENCODE_SKIP_START:-true}
+      OPENCODE_HOST: http://opencode:${OPENCODE_SERVER_PORT:-4096}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./data/openchamber/config:${OPENCHAMBER_DATA_DIR:-/home/openchamber/.config/openchamber}
+      - ./data/openchamber/share:/home/openchamber/.local/share/openchamber
+      - ./data/openchamber/state:/home/openchamber/.local/state/openchamber
+      - ./data/openchamber/cache:/home/openchamber/.cache/openchamber
+      - ./data/ssh:/home/openchamber/.ssh
+      - ${HOST_PROJECTS_DIR:-./projects}:/workspace:delegated
+    healthcheck:
+      test: ["CMD", "node", "-e", "const net=require('net');const port=Number(process.env.OPENCHAMBER_PORT||3000);const socket=net.connect({host:'127.0.0.1',port},()=>{socket.end();process.exit(0)});socket.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),3000);"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped

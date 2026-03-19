@@ -1,0 +1,50 @@
+FROM node:20-bullseye-slim
+
+ARG OPENCHAMBER_VERSION=1.9.1
+ARG OPENCODE_VERSION=1.2.27
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+    bash \
+    build-essential \
+    ca-certificates \
+    git \
+    less \
+    openssh-client \
+    python3 \
+    unzip \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 --version \
+    && node -e "const major = Number(process.versions.node.split('.')[0]); if (major < 20) { console.error('Node.js 20+ is required, found ' + process.versions.node); process.exit(1); } console.log('node', process.versions.node);" \
+    && npm --version
+
+RUN npm install -g --prefer-offline \
+    "@openchamber/web@${OPENCHAMBER_VERSION}" \
+    "opencode-ai@${OPENCODE_VERSION}" \
+    "opencode-linux-x64@${OPENCODE_VERSION}" \
+    && mkdir -p /usr/local/node_modules \
+    && cp -R /usr/local/lib/node_modules/opencode-linux-x64 /usr/local/node_modules/opencode-linux-x64
+
+RUN groupmod -n openchamber node \
+    && usermod -l openchamber -d /home/openchamber -m node
+
+ENV HOME=/home/openchamber
+ENV PATH=/usr/local/bin:/bin:/usr/sbin:/usr/bin:/sbin:${PATH}
+ENV OPENCHAMBER_HOST=0.0.0.0
+ENV OPENCODE_SKIP_START=true
+
+RUN mkdir -p \
+    /workspace/projects \
+    /home/openchamber/.config/openchamber \
+    /home/openchamber/.local/share/openchamber \
+    /home/openchamber/.local/state/openchamber \
+    /home/openchamber/.cache/openchamber \
+    /home/openchamber/.ssh \
+    && chown -R openchamber:openchamber /home/openchamber /workspace/projects
+
+COPY openchamber-entrypoint.sh entrypoint-common.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/openchamber-entrypoint.sh /usr/local/bin/entrypoint-common.sh
+
+USER openchamber
+
+ENTRYPOINT ["/usr/local/bin/openchamber-entrypoint.sh"]

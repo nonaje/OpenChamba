@@ -1,0 +1,74 @@
+FROM node:20-bullseye-slim AS deps
+
+ARG OPENCODE_VERSION=1.2.27
+ARG OPENSPEC_VERSION=1.2.0
+ARG OH_MY_OPENCODE_SLIM_VERSION=0.8.3
+ARG OPENCODE_PLUGIN_OPENSPEC_VERSION=0.1.2
+
+ENV BUN_INSTALL=/usr/local
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    git \
+    unzip \
+    && curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash \
+    && rm -rf /var/lib/apt/lists/*
+ENV PATH=/usr/local/bin:${PATH}
+
+RUN npm install -g --prefer-offline \
+    "opencode-ai@${OPENCODE_VERSION}" \
+    "@fission-ai/openspec@${OPENSPEC_VERSION}" \
+    "opencode-linux-x64@${OPENCODE_VERSION}"
+
+RUN bunx "oh-my-opencode-slim@${OH_MY_OPENCODE_SLIM_VERSION}" install --no-tui --tmux=no --skills=yes
+
+RUN node -e "const fs=require('fs'); const path='/root/.config/opencode/opencode.json'; fs.mkdirSync('/root/.config/opencode', {recursive:true}); const config=fs.existsSync(path) ? JSON.parse(fs.readFileSync(path)) : {}; config.plugin=Array.from(new Set([...(config.plugin||[]), 'oh-my-opencode-slim@${OH_MY_OPENCODE_SLIM_VERSION}', 'opencode-plugin-openspec@${OPENCODE_PLUGIN_OPENSPEC_VERSION}'])); config.server=config.server||{}; if (typeof config.server.port !== 'number') config.server.port=4096; fs.writeFileSync(path, JSON.stringify(config, null, 2));"
+RUN mkdir -p /usr/local/share/opencode-defaults \
+    && cp /root/.config/opencode/opencode.json /usr/local/share/opencode-defaults/opencode.json \
+    && [ ! -f /root/.config/opencode/oh-my-opencode-slim.json ] || cp /root/.config/opencode/oh-my-opencode-slim.json /usr/local/share/opencode-defaults/
+
+FROM node:20-bullseye-slim AS runtime
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssh-client \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupmod -n opencode node \
+    && usermod -l opencode -d /home/opencode -m node
+ENV HOME=/home/opencode
+ENV PATH=/usr/local/bin:/bin:/usr/sbin:/usr/bin:/sbin:${PATH}
+ENV OPENCODE_HOST=0.0.0.0
+ENV OPENCODE_DISABLE_AUTOUPDATE=true
+
+RUN mkdir -p /usr/local/node_modules
+COPY --from=deps /usr/local/lib/node_modules/opencode-ai /usr/local/lib/node_modules/opencode-ai
+COPY --from=deps /usr/local/lib/node_modules/@fission-ai/openspec /usr/local/lib/node_modules/@fission-ai/openspec
+COPY --from=deps /usr/local/lib/node_modules/opencode-linux-x64 /usr/local/node_modules/opencode-linux-x64
+COPY --from=deps /usr/local/bin/opencode /usr/local/bin/opencode
+COPY --from=deps /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=deps /usr/local/bin/bunx /usr/local/bin/bunx
+COPY --from=deps /usr/local/share/opencode-defaults /usr/local/share/opencode-defaults
+
+RUN ln -sf ../lib/node_modules/@fission-ai/openspec/bin/openspec.js /usr/local/bin/openspec
+
+RUN mkdir -p \
+    /workspace/projects \
+    /home/opencode/.config/opencode \
+    /home/opencode/.local/share/opencode \
+    /home/opencode/.local/state/opencode \
+    /home/opencode/.cache/opencode \
+    /home/opencode/.ssh \
+    && chown -R opencode:opencode /home/opencode /workspace/projects
+
+COPY --chown=opencode:opencode --from=deps /root/.config/opencode /home/opencode/.config/opencode
+COPY --chown=opencode:opencode --from=deps /root/.local/share/opencode /home/opencode/.local/share/opencode
+COPY --chown=opencode:opencode --from=deps /root/.cache/opencode /home/opencode/.cache/opencode
+
+COPY opencode-entrypoint.sh entrypoint-common.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/opencode-entrypoint.sh /usr/local/bin/entrypoint-common.sh
+
+USER opencode
+
+ENTRYPOINT ["/usr/local/bin/opencode-entrypoint.sh"]
