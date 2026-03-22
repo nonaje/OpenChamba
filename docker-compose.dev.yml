@@ -1,0 +1,19 @@
+services:
+  opencode:
+    ports:
+      - "${OPENCODE_BIND_ADDRESS:-127.0.0.1}:${OPENCODE_SERVER_PORT:-4096}:${OPENCODE_SERVER_PORT:-4096}"
+      - "${OPENCODE_BIND_ADDRESS:-127.0.0.1}:${OPENCODE_AUX_SERVER_PORT:-1455}:1455"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+
+  openchamber:
+    ports:
+      - "${OPENCHAMBER_BIND_ADDRESS:-127.0.0.1}:${OPENCHAMBER_PORT:-3000}:${OPENCHAMBER_PORT:-3000}"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+networks:
+  openchamba-internal:
+    name: openchamba-dev

@@ -1,0 +1,42 @@
+services:
+  opencode:
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+    volumes:
+      - ${HOST_PROJECTS_DIR:-./projects}:/workspace
+
+  openchamber:
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      OPENCHAMBER_UI_PASSWORD: ${OPENCHAMBER_UI_PASSWORD:?set_OPENCHAMBER_UI_PASSWORD}
+    volumes:
+      - ${HOST_PROJECTS_DIR:-./projects}:/workspace
+    networks:
+      - traefik-public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_DOCKER_NETWORK:-traefik-public}"
+      - "traefik.http.routers.openchamber.rule=Host(`${OPENCHAMBER_DOMAIN:-openchamba.online}`)"
+      - "traefik.http.routers.openchamber.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.openchamber.tls=true"
+      - "traefik.http.routers.openchamber.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.routers.openchamber.middlewares=openchamber-auth,openchamber-secure-headers"
+      - "traefik.http.services.openchamber.loadbalancer.server.port=${OPENCHAMBER_PORT:-3000}"
+      - "traefik.http.middlewares.openchamber-auth.basicauth.realm=OpenChamba"
+      - "traefik.http.middlewares.openchamber-auth.basicauth.removeheader=true"
+      - "traefik.http.middlewares.openchamber-auth.basicauth.users=${TRAEFIK_BASIC_AUTH_USERS:?set_TRAEFIK_BASIC_AUTH_USERS}"
+      - "traefik.http.middlewares.openchamber-secure-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.openchamber-secure-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.openchamber-secure-headers.headers.stsPreload=true"
+      - "traefik.http.middlewares.openchamber-secure-headers.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.openchamber-secure-headers.headers.frameDeny=true"
+      - "traefik.http.middlewares.openchamber-secure-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.openchamber-secure-headers.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.openchamber-secure-headers.headers.referrerPolicy=no-referrer"
+
+networks:
+  openchamba-internal:
+    name: openchamba-prod
+  traefik-public:
+    external: true
+    name: ${TRAEFIK_DOCKER_NETWORK:-traefik-public}
