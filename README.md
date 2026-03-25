@@ -2,12 +2,18 @@
 
 # OpenChamba
 
-Stack Docker para ejecutar OpenCode y OpenChamber con workspace compartido, datos persistentes y dos modos de despliegue:
+Stack Docker para ejecutar OpenCode y OpenChamber con workspace compartido, persistencia y una experiencia mas completa desde el primer arranque: plugins incluidos por defecto y soporte para Spec-Driven Development con OpenSpec.
+
+El repo incluye dos modos de uso:
 
 - **Desarrollo local** en `localhost`.
-- **Produccion** detras de Traefik con exposicion minima.
+- **Deploy en VPS** mediante `docker-compose.prod.yml`.
+
+Cuando en esta documentacion se menciona `prod` o `produccion`, se refiere a ese escenario de despliegue en servidor usando el override incluido, no a una infraestructura unica u oficial.
 
 ## Que es
+
+OpenChamba busca que puedas levantar un entorno funcional rapido, pero sin quedarte en un Compose minimo. La idea es darte una base de trabajo util para desarrollo asistido por agentes, con persistencia, plugins y una integracion directa con OpenSpec.
 
 Este repositorio levanta dos servicios coordinados:
 
@@ -20,31 +26,67 @@ Ambos contenedores comparten:
 - persistencia de configuracion, cache, estado y datos de aplicacion
 - un directorio `~/.ssh` comun (`./data/ssh`)
 
-## Modos de despliegue
+## Que incluye
+
+### Stack base
+
+| Componente | Version por defecto | Rol |
+| --- | --- | --- |
+| OpenCode | `1.3.2` | Servicio principal |
+| OpenChamber Web | `1.9.1` | Interfaz web |
+| OpenSpec | `1.2.0` | CLI `openspec` en imagen de OpenCode |
+| oh-my-opencode-slim | `0.8.4` | Plugin para flujo multiagente |
+| opencode-plugin-openspec | `0.1.4` | Integracion de OpenSpec en OpenCode |
+
+Nota: la imagen de `openchamber` tambien instala `opencode-ai@1.3.2` y `opencode-linux-x64@1.3.2` como dependencia interna de esa UI.
+
+### Plugins y flujo SDD incluidos
+
+Una parte importante de la identidad de OpenChamba es que no se limita a levantar OpenCode + OpenChamber: tambien te deja lista una base de trabajo mas opinionada para agentes, plugins y Spec-Driven Development.
+
+- `oh-my-opencode-slim` agrega un flujo multiagente listo para usar.
+- `opencode-plugin-openspec` integra OpenSpec dentro de OpenCode.
+- `openspec` queda disponible en el contenedor `opencode` para trabajar con SDD desde terminal.
+
+Agentes incluidos por `oh-my-opencode-slim`:
+
+- `orchestrator`
+- `explorer`
+- `librarian`
+- `oracle`
+- `designer`
+- `fixer`
+
+## Modos de uso
 
 | Modo | Archivos Compose | Exposicion | Uso recomendado |
 | --- | --- | --- | --- |
 | Dev | `docker-compose.yml` + `docker-compose.dev.yml` | Puertos en `127.0.0.1` | Desarrollo local |
-| Prod | `docker-compose.yml` + `docker-compose.prod.yml` | Solo por Traefik (HTTPS) | VPS/produccion |
+| Deploy VPS | `docker-compose.yml` + `docker-compose.prod.yml` | Sin `ports`, acceso via reverse proxy | Servidor remoto |
 
-## Que incluye
+Nota sobre infraestructura:
 
-| Componente | Version por defecto | Rol |
-| --- | --- | --- |
-| OpenCode | `1.2.27` | Servicio principal |
-| OpenChamber Web | `1.9.1` | Interfaz web |
-| OpenSpec | `1.2.0` | CLI `openspec` en imagen de OpenCode |
-| oh-my-opencode-slim | `0.8.3` | Plugin para flujo multiagente |
-| opencode-plugin-openspec | `0.1.2` | Integracion de OpenSpec en OpenCode |
+- Este repo incluye un ejemplo de despliegue en VPS usando labels de Traefik.
+- Traefik no es obligatorio: es la implementacion de referencia que acompana este stack.
+- La capa de routing, acceso y seguridad depende de cada entorno.
+- Por ejemplo, podes usar Traefik + Cloudflare Zero Trust, otro reverse proxy, una VPN, un tunnel o cualquier otra estrategia de exposicion.
+
+## Por que este stack
+
+- Levanta OpenCode y OpenChamber ya conectados entre si.
+- Mantiene workspace, estado y configuracion persistentes entre reinicios.
+- Te deja plugins utiles preinstalados desde el inicio.
+- Incorpora OpenSpec como parte del flujo de trabajo, no como agregado posterior.
+- Lo podes usar tanto en local como en un servidor remoto sin cambiar la base del stack.
 
 ## Archivos principales
 
-- `docker-compose.yml`: base comun (servicios, volumenes, healthchecks, hardening, red interna).
-- `docker-compose.dev.yml`: overrides de desarrollo (ports en localhost, `extra_hosts`, `NODE_ENV=development`).
-- `docker-compose.prod.yml`: overrides de produccion (Traefik, auth obligatoria, `NODE_ENV=production`, sin `ports`).
-- `.env.dev.example`: plantilla de variables para entorno local.
-- `.env.prod.example`: plantilla de variables para entorno productivo.
-- `.env.example`: referencia general heredada para variables del stack.
+- `docker-compose.yml`: base comun del stack.
+- `docker-compose.dev.yml`: override para desarrollo local con puertos publicados en localhost.
+- `docker-compose.prod.yml`: override orientado a deploy en VPS detras de un reverse proxy, sin `ports` publicados.
+- `.env.dev.example`: plantilla para desarrollo local.
+- `.env.prod.example`: plantilla para deploy en servidor.
+- `.env.example`: referencia general de variables del stack.
 
 ## Requisitos
 
@@ -53,14 +95,16 @@ Generales:
 - Docker Engine con `docker compose`
 - Docker Compose Plugin v2
 - Bash para ejecutar `./init-data-dirs.sh`
-- Permisos para crear y ajustar ownership de `./data` y `HOST_PROJECTS_DIR`
+- permisos para crear y ajustar ownership de `./data` y `HOST_PROJECTS_DIR`
 
-Produccion (extra):
+Requisitos para el ejemplo de deploy en VPS:
 
-- Traefik funcionando en el host (o en el mismo Docker host)
-- Red Docker externa para Traefik (default: `traefik-public`)
-- DNS del dominio apuntando al VPS (ej: `openchamba.online`)
-- Certresolver configurado en Traefik (ej: `letsencrypt`)
+- un VPS o Docker host accesible
+- un reverse proxy o capa de exposicion a tu eleccion
+- si usas el override incluido sin cambios, Traefik funcionando en el host o en el mismo Docker host
+- si usas Traefik, una red Docker externa para Traefik (default: `traefik-public`)
+- DNS del dominio apuntando al VPS
+- si usas TLS automatico con Traefik, un certresolver configurado
 
 ## Inicio rapido (desarrollo local)
 
@@ -71,40 +115,33 @@ docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.y
 docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml ps
 ```
 
-Despues del arranque:
+Acceso esperado:
 
 - OpenChamber UI: `http://127.0.0.1:3000`
 - OpenCode API: `http://127.0.0.1:4096`
-- Puerto auxiliar OpenCode (si aplica): `127.0.0.1:${OPENCODE_AUX_SERVER_PORT}`
+- Puerto auxiliar OpenCode: `127.0.0.1:${OPENCODE_AUX_SERVER_PORT}`
 
-## Inicio rapido (produccion con Traefik)
+## Inicio rapido (deploy en VPS)
 
-1) Preparar variables de prod
+1) Preparar variables del servidor
 
 ```bash
 cp .env.prod.example .env.prod
 ```
 
-2) Generar hash para Basic Auth de Traefik
+2) Editar `.env.prod` y definir al menos:
 
-```bash
-docker run --rm httpd:2.4-alpine htpasswd -nbB admin 'cambia-esta-password'
-```
+- `OPENCHAMBER_UI_PASSWORD`
+- `OPENCHAMBER_DOMAIN`
+- `TRAEFIK_CERTRESOLVER` si vas a usar el ejemplo con Traefik
 
-3) Editar `.env.prod` y definir al menos:
-
-- `OPENCHAMBER_UI_PASSWORD` (obligatoria, auth de la app)
-- `TRAEFIK_BASIC_AUTH_USERS` (obligatoria, auth en edge/proxy)
-- `OPENCHAMBER_DOMAIN=openchamba.online`
-- `TRAEFIK_CERTRESOLVER` segun tu Traefik
-
-4) Crear red externa de Traefik (si no existe)
+3) Si vas a usar Traefik con la configuracion incluida, crear la red externa si no existe
 
 ```bash
 docker network create traefik-public || true
 ```
 
-5) Inicializar directorios y levantar stack
+4) Inicializar directorios y levantar el stack
 
 ```bash
 ./init-data-dirs.sh
@@ -112,13 +149,55 @@ docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod
 docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml ps
 ```
 
-Acceso esperado:
+Acceso esperado con el ejemplo incluido:
 
-- `https://openchamba.online` (via Traefik)
-- `openchamber` no publica puertos al host en prod
-- `opencode` queda solo en red interna (no expuesto a internet)
+- `https://openchamba.online` via Traefik
+- `openchamber` no publica puertos al host
+- `opencode` queda solo en red interna
 
-## Configuracion por entorno
+## OpenSpec y Spec-Driven Development
+
+OpenSpec no aparece aca como un extra: forma parte de la experiencia que propone OpenChamba. El stack ya deja disponible el CLI `openspec` dentro del contenedor `opencode`, listo para trabajar con una metodologia SDD sobre los repos montados en `/workspace`.
+
+OpenSpec viene preinstalado, pero no inicializa automaticamente cada proyecto. Tenes que ejecutar `openspec init` en la raiz del repo con el que quieras trabajar.
+
+Ejemplo:
+
+```bash
+docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml exec opencode sh -lc 'cd /workspace/mi-proyecto && openspec init'
+```
+
+Comandos CLI utiles despues de `init`:
+
+- `openspec list`
+- `openspec show`
+- `openspec validate`
+- `openspec status`
+- `openspec archive`
+- `openspec update`
+
+Comandos de chat del agente:
+
+- `/opsx:propose`
+- `/opsx:explore`
+- `/opsx:apply`
+- `/opsx:archive`
+
+## Usar OpenCode desde terminal
+
+```bash
+docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml exec opencode bash
+cd /workspace/mi-proyecto
+opencode
+```
+
+Notas:
+
+- el binario `opencode` ya esta en el `PATH`
+- el servicio principal sigue corriendo como `opencode serve`
+- los repos del host quedan disponibles en `/workspace`
+
+## Variables importantes
 
 ### Variables comunes
 
@@ -132,7 +211,7 @@ Acceso esperado:
 | `OPENCHAMBER_HOST` | `0.0.0.0` | Host interno de escucha de OpenChamber |
 | `OPENCHAMBER_DATA_DIR` | `/home/openchamber/.config/openchamber` | Directorio interno de datos de OpenChamber |
 | `OPENCODE_SKIP_START` | `true` | OpenChamber usa el `opencode` del stack en vez de uno embebido |
-| `OPENCHAMBER_UI_PASSWORD` | vacia en dev / requerida en prod | Password de la UI de OpenChamber |
+| `OPENCHAMBER_UI_PASSWORD` | vacia en dev / requerida en deploy VPS | Password de la UI de OpenChamber |
 | `NODE_ENV` | segun override (`development`/`production`) | Entorno de ejecucion |
 
 ### Variables solo dev
@@ -140,66 +219,27 @@ Acceso esperado:
 | Variable | Default | Uso |
 | --- | --- | --- |
 | `OPENCODE_BIND_ADDRESS` | `127.0.0.1` | Address host para publicar OpenCode |
-| `OPENCODE_AUX_SERVER_PORT` | `1455` | Puerto host para servicio auxiliar de OpenCode (contenedor escucha en `1455`) |
+| `OPENCODE_AUX_SERVER_PORT` | `1455` | Puerto host para servicio auxiliar de OpenCode |
 | `OPENCHAMBER_BIND_ADDRESS` | `127.0.0.1` | Address host para publicar OpenChamber |
 
-### Variables solo prod (Traefik)
+### Variables del override de deploy en VPS
 
 | Variable | Default ejemplo | Uso |
 | --- | --- | --- |
-| `OPENCHAMBER_DOMAIN` | `openchamba.online` | Host rule de Traefik |
+| `OPENCHAMBER_DOMAIN` | `openchamba.online` | Host rule del ejemplo con Traefik |
 | `TRAEFIK_ENTRYPOINT` | `websecure` | Entrypoint HTTPS en Traefik |
 | `TRAEFIK_CERTRESOLVER` | `letsencrypt` | Resolver ACME de Traefik |
 | `TRAEFIK_DOCKER_NETWORK` | `traefik-public` | Red Docker que Traefik usa para reachability |
-| `TRAEFIK_BASIC_AUTH_USERS` | `admin:$2y$...` | Credenciales Basic Auth en formato htpasswd |
 
 Notas utiles:
 
-- En prod, Compose falla si faltan `OPENCHAMBER_UI_PASSWORD` o `TRAEFIK_BASIC_AUTH_USERS`.
-- `OPENCODE_AUX_SERVER_PORT` solo afecta el mapeo host->contenedor en dev; no cambia el puerto interno `1455`.
-- `host.docker.internal` se agrega solo en dev para compatibilidad local.
+- en el override de deploy, Compose falla si falta `OPENCHAMBER_UI_PASSWORD`
+- `OPENCODE_AUX_SERVER_PORT` solo afecta el mapeo host->contenedor en dev; no cambia el puerto interno `1455`
+- `host.docker.internal` se agrega solo en dev para compatibilidad local
 
-## Arquitectura
+## Persistencia
 
-### Desarrollo local
-
-```text
-Navegador
-    |
-    v
-127.0.0.1:3000
-    |
-    v
-+-------------------+        red interna de Compose        +-------------------+
-|   openchamber     | ----------------------------------> |     opencode      |
-|   UI / Web        |                                      |   servicio base   |
-|   puerto 3000     | <---------------------------------- |   puerto 4096     |
-+-------------------+                                      +-------------------+
-        |
-        +------------------- /workspace ------------------------------+
-        +--------------------- ./data/ssh ----------------------------+
-```
-
-### Produccion con Traefik
-
-```text
-Internet
-   |
-   v
-Traefik (:443, TLS)
-   |
-   v
-+-------------------+        red interna de Compose        +-------------------+
-|   openchamber     | ----------------------------------> |     opencode      |
-|   UI / Web        |                                      |   servicio base   |
-+-------------------+                                      +-------------------+
-
-Exposicion publica directa:
-- openchamber: NO (solo via Traefik)
-- opencode: NO
-```
-
-## Persistencia y estructura
+Directorios persistentes principales:
 
 ```text
 .
@@ -218,16 +258,10 @@ Exposicion publica directa:
 `- projects/
 ```
 
-Mapeos persistentes:
+Mapeos clave:
 
 - `./data/opencode/config` -> `/home/opencode/.config/opencode`
-- `./data/opencode/share` -> `/home/opencode/.local/share/opencode`
-- `./data/opencode/state` -> `/home/opencode/.local/state/opencode`
-- `./data/opencode/cache` -> `/home/opencode/.cache/opencode`
 - `./data/openchamber/config` -> `${OPENCHAMBER_DATA_DIR}`
-- `./data/openchamber/share` -> `/home/openchamber/.local/share/openchamber`
-- `./data/openchamber/state` -> `/home/openchamber/.local/state/openchamber`
-- `./data/openchamber/cache` -> `/home/openchamber/.cache/openchamber`
 - `./data/ssh` -> `~/.ssh` en ambos contenedores
 - `${HOST_PROJECTS_DIR}` -> `/workspace` en ambos contenedores
 
@@ -235,7 +269,7 @@ Mapeos persistentes:
 
 ## Operacion diaria
 
-Puedes definir helpers para no repetir `-f` y `--env-file`:
+Helpers utiles:
 
 ```bash
 dcdev() {
@@ -259,7 +293,7 @@ dcdev logs -f
 dcdev logs -f openchamber
 dcprod logs -f openchamber
 
-# Reinicio/stop
+# Reinicio / stop
 dcdev up -d
 dcdev down
 dcprod up -d
@@ -275,89 +309,32 @@ dcdev exec openchamber bash
 dcprod exec opencode bash
 ```
 
-## Plugins incluidos
-
-### oh-my-opencode-slim
-
-[`oh-my-opencode-slim`](https://github.com/alvinunreal/oh-my-opencode-slim) se instala por defecto en OpenCode y agrega flujo multiagente.
-
-- Agente principal: `orchestrator`
-- Especialistas incluidos: `explorer`, `librarian`, `oracle`, `designer`, `fixer`
-
-### OpenSpec
-
-[`OpenSpec`](https://openspec.dev/) habilita Spec-Driven Development (SDD). El CLI `openspec` queda disponible en el contenedor `opencode`.
-
-### opencode-plugin-openspec
-
-[`opencode-plugin-openspec`](https://github.com/Octane0411/opencode-plugin-openspec) integra OpenSpec en OpenCode.
-
-## Uso de OpenSpec SDD
-
-OpenSpec preinstalado no inicializa automaticamente cada proyecto. Debes ejecutar `openspec init` en la raiz del repo.
-
-Ejemplo:
-
-```bash
-docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml exec opencode sh -lc 'cd /workspace/mi-proyecto && openspec init'
-```
-
-Comandos CLI utiles despues de init:
-
-- `openspec list`
-- `openspec show`
-- `openspec validate`
-- `openspec status`
-- `openspec archive`
-- `openspec update`
-
-Comandos de chat del agente:
-
-- `/opsx:propose`
-- `/opsx:explore`
-- `/opsx:apply`
-- `/opsx:archive`
-
-## Usar OpenCode desde terminal
-
-Si prefieres trabajar con terminal dentro de OpenCode:
-
-```bash
-docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml exec opencode bash
-cd /workspace/mi-proyecto
-opencode
-```
-
-Notas:
-
-- El binario `opencode` ya esta en el `PATH`.
-- El servicio principal sigue corriendo como `opencode serve`.
-- Los repos del host quedan disponibles en `/workspace`.
-
-## Seguridad
+## Seguridad y alcance del ejemplo de deploy
 
 Medidas aplicadas en el stack:
 
-- Contenedores ejecutan con usuarios no root (`opencode` / `openchamber`).
-- `security_opt: no-new-privileges:true`.
-- `cap_drop: [ALL]`.
-- `pids_limit: 512`.
-- Rotacion de logs (`json-file`, `10m`, `3` archivos).
-- Healthchecks activos para ambos servicios.
-- En prod: sin `ports:` publicados, acceso via Traefik, Basic Auth de edge y password de UI obligatoria.
-- Headers de seguridad en Traefik (HSTS, frame deny, nosniff, referrer policy, etc).
+- contenedores ejecutan con usuarios no root (`opencode` / `openchamber`)
+- `security_opt: no-new-privileges:true`
+- `cap_drop: [ALL]`
+- `pids_limit: 512`
+- rotacion de logs (`json-file`, `10m`, `3` archivos)
+- healthchecks activos para ambos servicios
+- en el override de deploy: sin `ports:` publicados y password de UI obligatoria
+- si usas el ejemplo con Traefik: headers de seguridad via labels
 
-Limites a considerar:
+Alcance de este repo:
 
-- `./data/ssh` es compartido por ambos contenedores; protege ese directorio en el host.
-- `${HOST_PROJECTS_DIR}` se monta con lectura/escritura; usa rutas controladas en prod.
-- Este repo no instala Traefik; asume que ya existe y esta endurecido (`exposedByDefault=false`, redirect HTTP->HTTPS, etc).
+- no instala Traefik por ti
+- no configura Cloudflare Zero Trust ni otra capa de acceso externo
+- no impone una unica estrategia de exposicion o seguridad
+
+Si en tu entorno usas Traefik + Cloudflare Zero Trust, eso encaja bien con este stack, pero sigue siendo una implementacion personal y reemplazable por cualquier otra infraestructura equivalente.
 
 ## Troubleshooting
 
-### Error: variable obligatoria no definida en prod
+### Error: variable obligatoria no definida en deploy
 
-Si ves `set_OPENCHAMBER_UI_PASSWORD` o `set_TRAEFIK_BASIC_AUTH_USERS`, define esas variables en `.env.prod` y vuelve a levantar.
+Si ves `set_OPENCHAMBER_UI_PASSWORD`, define esa variable en `.env.prod` y vuelve a levantar.
 
 ### Traefik responde 404
 
