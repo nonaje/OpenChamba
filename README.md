@@ -110,7 +110,7 @@ Requisitos para el ejemplo de deploy en VPS:
 
 ```bash
 cp .env.dev.example .env.dev
-./init-data-dirs.sh
+./init-data-dirs.sh --env-file .env.dev
 docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml ps
 ```
@@ -138,13 +138,16 @@ cp .env.prod.example .env.prod
 3) Si vas a usar Traefik con la configuracion incluida, crear la red externa si no existe
 
 ```bash
-docker network create traefik-public || true
+set -a
+. .env.prod
+set +a
+docker network create "${TRAEFIK_DOCKER_NETWORK}" || true
 ```
 
 4) Inicializar directorios y levantar el stack
 
 ```bash
-./init-data-dirs.sh
+./init-data-dirs.sh --env-file .env.prod
 docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml ps
 ```
@@ -267,6 +270,13 @@ Mapeos clave:
 
 `./init-data-dirs.sh` crea estos directorios e intenta ajustar ownership a `1000:1000`.
 
+Si usas variables custom en `.env.dev` o `.env.prod`, corre el script con `--env-file` para que `HOST_PROJECTS_DIR` y rutas relacionadas queden alineadas con Compose:
+
+```bash
+./init-data-dirs.sh --env-file .env.dev
+./init-data-dirs.sh --env-file .env.prod
+```
+
 ## Operacion diaria
 
 Helpers utiles:
@@ -308,6 +318,27 @@ dcdev exec opencode bash
 dcdev exec openchamber bash
 dcprod exec opencode bash
 ```
+
+## Tests
+
+Suite disponible en `tests/compose/`:
+
+- `tests/compose/test-init-data-dirs.sh`: valida la inicializacion de directorios con valores default, rutas custom relativas/absolutas y fallo temprano si falta el env file.
+- `tests/compose/test-compose-flows.sh`: valida el merge/render de Compose para dev y prod con overrides de entorno, incluyendo password requerida en prod y variables de Traefik.
+- `tests/compose/test-compose-live-smoke.sh`: smoke test opt-in que levanta ambos stacks, espera healthchecks y valida que los servicios queden corriendo.
+- `tests/compose/run.sh`: ejecuta toda la suite en orden.
+
+Ejecucion local:
+
+```bash
+./tests/compose/run.sh
+```
+
+Notas:
+
+- `test-init-data-dirs.sh` no requiere Docker.
+- `test-compose-flows.sh` usa `docker compose config`; si Docker no esta disponible, la prueba se marca como `skip`.
+- `test-compose-live-smoke.sh` es opt-in y se ejecuta solo con `RUN_LIVE_SMOKE=1 ./tests/compose/run.sh`.
 
 ## Seguridad y alcance del ejemplo de deploy
 
