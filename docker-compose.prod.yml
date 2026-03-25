@@ -16,7 +16,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=${TRAEFIK_DOCKER_NETWORK:-traefik-public}"
-      - "traefik.http.routers.openchamber.rule=Host(`${OPENCHAMBER_DOMAIN:-openchamba.online}`)"
+      - "traefik.http.routers.openchamber.rule=Host(`${OPENCHAMBER_DOMAIN:-openchamba.example.com}`)"
       - "traefik.http.routers.openchamber.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
       - "traefik.http.routers.openchamber.tls=true"
       - "traefik.http.routers.openchamber.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"

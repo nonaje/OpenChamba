@@ -151,7 +151,7 @@ docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod
 
 Acceso esperado con el ejemplo incluido:
 
-- `https://openchamba.online` via Traefik
+- `https://openchamba.example.com` via Traefik
 - `openchamber` no publica puertos al host
 - `opencode` queda solo en red interna
 
@@ -226,7 +226,7 @@ Notas:
 
 | Variable | Default ejemplo | Uso |
 | --- | --- | --- |
-| `OPENCHAMBER_DOMAIN` | `openchamba.online` | Host rule del ejemplo con Traefik |
+| `OPENCHAMBER_DOMAIN` | `openchamba.example.com` | Host rule del ejemplo con Traefik |
 | `TRAEFIK_ENTRYPOINT` | `websecure` | Entrypoint HTTPS en Traefik |
 | `TRAEFIK_CERTRESOLVER` | `letsencrypt` | Resolver ACME de Traefik |
 | `TRAEFIK_DOCKER_NETWORK` | `traefik-public` | Red Docker que Traefik usa para reachability |
