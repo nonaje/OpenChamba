@@ -138,11 +138,10 @@ cp .env.prod.example .env.prod
 3) Si vas a usar Traefik con la configuracion incluida, crear la red externa si no existe
 
 ```bash
-set -a
-. .env.prod
-set +a
-docker network create "${TRAEFIK_DOCKER_NETWORK}" || true
+docker network create "traefik-public" || true
 ```
+
+Si cambiaste `TRAEFIK_DOCKER_NETWORK` en `.env.prod`, crea esa red con el mismo nombre en lugar de `traefik-public`.
 
 4) Inicializar directorios y levantar el stack
 

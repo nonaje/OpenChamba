@@ -6,23 +6,61 @@ usage() {
 Usage: ./init-data-dirs.sh [--env-file PATH]
 
 Options:
-  --env-file PATH  Load environment variables before initializing directories.
+  --env-file PATH  Read HOST_PROJECTS_DIR from a Compose-style env file.
   -h, --help       Show this help message.
 EOF
 }
 
-load_env_file() {
+trim_leading_whitespace() {
+  local value="$1"
+  printf '%s' "${value#"${value%%[![:space:]]*}"}"
+}
+
+trim_trailing_whitespace() {
+  local value="$1"
+  printf '%s' "${value%"${value##*[![:space:]]}"}"
+}
+
+read_env_value() {
   local env_file_path="$1"
+  local var_name="$2"
+  local line=""
+  local raw_value=""
 
-  if [[ ! -f "$env_file_path" ]]; then
-    printf 'Env file not found: %s\n' "$env_file_path" >&2
-    exit 1
-  fi
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
 
-  set -a
-  # shellcheck disable=SC1090
-  . "$env_file_path"
-  set +a
+    if [[ ! "$line" =~ ^[[:space:]]*(export[[:space:]]+)?${var_name}[[:space:]]*[:=][[:space:]]*(.*)$ ]]; then
+      continue
+    fi
+
+    raw_value="${BASH_REMATCH[2]}"
+    raw_value="$(trim_leading_whitespace "$raw_value")"
+
+    if [[ "$raw_value" == \#* ]]; then
+      printf '%s\n' ""
+      return 0
+    fi
+
+    if [[ "$raw_value" == "'"* ]]; then
+      if [[ "$raw_value" =~ ^\'(([^\']|\\.)*)\'([[:space:]]+#.*)?[[:space:]]*$ ]]; then
+        printf '%s\n' "${BASH_REMATCH[1]//\\\'/\'}"
+        return 0
+      fi
+    elif [[ "$raw_value" == '"'* ]]; then
+      if [[ "$raw_value" =~ ^\"(([^\"]|\\.)*)\"([[:space:]]+#.*)?[[:space:]]*$ ]]; then
+        printf '%s\n' "${BASH_REMATCH[1]}"
+        return 0
+      fi
+    else
+      raw_value="${raw_value%%[[:space:]]#*}"
+      raw_value="$(trim_trailing_whitespace "$raw_value")"
+      printf '%s\n' "$raw_value"
+      return 0
+    fi
+  done <"$env_file_path"
+
+  return 1
 }
 
 root_dir=$(pwd)
@@ -55,7 +93,13 @@ if [[ -n "$env_file" ]]; then
   if [[ "$env_file" != /* ]]; then
     env_file="${root_dir}/${env_file}"
   fi
-  load_env_file "$env_file"
+  if [[ ! -f "$env_file" ]]; then
+    printf 'Env file not found: %s\n' "$env_file" >&2
+    exit 1
+  fi
+  if env_projects_dir="$(read_env_value "$env_file" "HOST_PROJECTS_DIR")"; then
+    HOST_PROJECTS_DIR="$env_projects_dir"
+  fi
 fi
 
 data_root="${root_dir}/data"

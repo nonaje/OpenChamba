@@ -84,6 +84,19 @@ assert_dir_exists "$absolute_projects_dir"
 assert_dir_missing "${absolute_env_case_dir}/projects"
 pass "absolute HOST_PROJECTS_DIR from env file is honored"
 
+safe_parse_case_dir="${tmp_root}/safe-parse-env"
+marker_file="${safe_parse_case_dir}/should-not-exist"
+mkdir -p "$safe_parse_case_dir"
+{
+  printf '%s\n' "HOST_PROJECTS_DIR='./custom-\$HOME-projects'"
+  printf 'OPENCHAMBER_UI_PASSWORD=$(touch %q)\n' "$marker_file"
+} >"${safe_parse_case_dir}/.env.test"
+run_case "$safe_parse_case_dir" --env-file .env.test
+assert_dir_exists "${safe_parse_case_dir}/custom-\$HOME-projects"
+assert_dir_missing "$marker_file"
+assert_dir_missing "${safe_parse_case_dir}/projects"
+pass "env file is parsed without executing shell expressions"
+
 missing_env_case_dir="${tmp_root}/missing-env"
 mkdir -p "$missing_env_case_dir"
 if (
