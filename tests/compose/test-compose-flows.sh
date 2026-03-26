@@ -39,6 +39,15 @@ assert_not_contains() {
   fi
 }
 
+assert_matches() {
+  local file_path="$1"
+  local pattern="$2"
+
+  if ! grep -Eq -- "$pattern" "$file_path"; then
+    fail "expected pattern '${pattern}' in ${file_path}"
+  fi
+}
+
 compose_config() {
   local env_file="$1"
   local override_file="$2"
@@ -82,7 +91,7 @@ assert_contains "$dev_output_file" 'published: "44096"'
 assert_contains "$dev_output_file" 'published: "11455"'
 assert_contains "$dev_output_file" 'published: "33000"'
 assert_contains "$dev_output_file" "source: ${dev_projects_source}"
-assert_contains "$dev_output_file" 'host.docker.internal: host-gateway'
+assert_matches "$dev_output_file" 'host\.docker\.internal[[:space:]"]*[:=][[:space:]"]*host-gateway|host-gateway[[:space:]"]*[:=][[:space:]"]*host\.docker\.internal'
 pass "dev config respects custom env overrides"
 
 prod_env_file="${tmp_root}/prod.env"
@@ -107,9 +116,9 @@ EOF
 compose_config "$prod_env_file" "${repo_root}/docker-compose.prod.yml" "$prod_output_file"
 assert_contains "$prod_output_file" 'name: openchamba-prod'
 assert_contains "$prod_output_file" 'name: custom-traefik-network'
-assert_contains "$prod_output_file" 'Host(`agents.example.test`)'
-assert_contains "$prod_output_file" 'traefik.http.routers.openchamber.entrypoints=edge'
-assert_contains "$prod_output_file" 'traefik.http.routers.openchamber.tls.certresolver=stagingresolver'
+assert_matches "$prod_output_file" 'Host\([`"'"'"']?agents\.example\.test[`"'"'"']?\)'
+assert_matches "$prod_output_file" 'traefik\.http\.routers\.openchamber\.entrypoints[[:space:]"]*[:=][[:space:]"]*edge'
+assert_matches "$prod_output_file" 'traefik\.http\.routers\.openchamber\.tls\.certresolver[[:space:]"]*[:=][[:space:]"]*stagingresolver'
 assert_contains "$prod_output_file" 'source: /tmp/openchamba-prod-projects'
 assert_contains "$prod_output_file" 'traefik-public:'
 assert_contains "$prod_output_file" 'openchamba-internal:'
