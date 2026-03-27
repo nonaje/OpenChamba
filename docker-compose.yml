@@ -55,6 +55,8 @@ services:
       - ./data/openchamber/share:/home/openchamber/.local/share/openchamber
       - ./data/openchamber/state:/home/openchamber/.local/state/openchamber
       - ./data/openchamber/cache:/home/openchamber/.cache/openchamber
+      - ./data/opencode/config:/home/openchamber/.config/opencode
+      - ./data/opencode/share:/home/openchamber/.local/share/opencode
       - ./data/ssh:/home/openchamber/.ssh
       - ${HOST_PROJECTS_DIR:-./projects}:/workspace:delegated
     healthcheck:

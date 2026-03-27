@@ -12,6 +12,7 @@ Este repositorio levanta dos servicios coordinados:
 - **OpenChamber** como interfaz web publicada por defecto en `127.0.0.1:3000` y conectada al servicio `opencode` del stack.
 
 El proyecto tambien prepara persistencia para configuracion, cache, estado, workspace y claves SSH compartidas entre ambos contenedores.
+Ademas, OpenChamber monta la configuracion real de OpenCode para que los cambios hechos desde la UI impacten al servicio `opencode` del stack.
 
 ## Que incluye
 
@@ -22,6 +23,12 @@ El proyecto tambien prepara persistencia para configuracion, cache, estado, work
 | OpenSpec | `1.2.0` | CLI `openspec` disponible en la imagen de OpenCode |
 | oh-my-opencode-slim | `0.8.3` | Plugin instalado y registrado en OpenCode |
 | opencode-plugin-openspec | `0.1.2` | Plugin registrado en la config de OpenCode |
+
+Notas operativas del stack:
+
+- OpenChamber comparte `./data/opencode/config` y `./data/opencode/share` con el servicio `opencode` para editar la misma configuracion efectiva de OpenCode.
+- `./data/openchamber/*` sigue reservado para runtime, logs y preferencias propias de OpenChamber.
+- `./data/opencode/state` y `./data/opencode/cache` permanecen aislados para no mezclar sockets, locks ni temporales entre contenedores.
 
 ## Requisitos
 
@@ -69,13 +76,15 @@ La configuracion principal vive en `.env`. El archivo `.env.example` ya document
 | `OPENCHAMBER_HOST` | `0.0.0.0` | Host interno donde escucha OpenChamber |
 | `OPENCHAMBER_DATA_DIR` | `/home/openchamber/.config/openchamber` | Directorio interno de datos de OpenChamber; `./data/openchamber/config` se monta ahi |
 | `OPENCODE_SKIP_START` | `true` | Hace que OpenChamber use el servicio `opencode` del Compose en lugar de iniciar uno embebido |
-| `OPENCHAMBER_UI_PASSWORD` | `change-me-before-sharing` | Password de acceso a la UI; vacia desactiva la autenticacion |
+| `OPENCHAMBER_UI_PASSWORD` | vacia | Password de acceso a la UI; vacia desactiva la autenticacion |
 
 Notas utiles:
 
 - `OPENCHAMBER_UI_PASSWORD` solo aplica si tiene un valor no vacio.
 - `HOST_PROJECTS_DIR` puede apuntar a cualquier ruta existente en el host.
 - `OPENCHAMBER_DATA_DIR` cambia la ruta interna donde OpenChamber guarda su configuracion y logs; el stack monta `./data/openchamber/config` en esa ruta.
+- OpenChamber tambien monta `./data/opencode/config` en `~/.config/opencode` y `./data/opencode/share` en `~/.local/share/opencode` para que la UI y el servicio `opencode` usen la misma configuracion efectiva.
+- El boton `Restart OpenCode and reload configuration` de la UI reinicia el proceso solo cuando OpenChamber administra un OpenCode embebido. En este stack, con `OPENCODE_SKIP_START=true`, OpenChamber trata a OpenCode como externo: el boton vuelve a sondear el backend y refresca el estado de la UI, pero no reinicia el contenedor `opencode`.
 - Si cambias puertos, actualiza `.env` antes de volver a levantar el stack.
 
 Si necesitas ejecutar OpenChamber sin password, deja `OPENCHAMBER_UI_PASSWORD` vacia:
@@ -196,8 +205,12 @@ Mapeos persistentes del stack:
 - `./data/openchamber/share` -> `/home/openchamber/.local/share/openchamber`
 - `./data/openchamber/state` -> `/home/openchamber/.local/state/openchamber`
 - `./data/openchamber/cache` -> `/home/openchamber/.cache/openchamber`
+- `./data/opencode/config` -> `/home/openchamber/.config/opencode`
+- `./data/opencode/share` -> `/home/openchamber/.local/share/opencode`
 - `./data/ssh` -> `~/.ssh` en ambos contenedores
 - `${HOST_PROJECTS_DIR}` -> `/workspace` en ambos contenedores
+
+Con este montaje cruzado, la configuracion de OpenCode modificada desde la UI de OpenChamber cae en los mismos archivos que consume el servicio `opencode`. El estado y la cache permanecen separados para evitar conflictos de runtime.
 
 `./init-data-dirs.sh` crea estos directorios y, si corresponde, ajusta ownership a `1000:1000`.
 

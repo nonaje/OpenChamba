@@ -24,7 +24,9 @@ export OPENCHAMBER_PORT OPENCHAMBER_HOST OPENCHAMBER_DATA_DIR
 dirs=(
   "/workspace/projects"
   "${OPENCHAMBER_DATA_DIR}"
+  "${HOME}/.config/opencode"
   "${HOME}/.local/share/openchamber"
+  "${HOME}/.local/share/opencode"
   "${HOME}/.local/state/openchamber"
   "${HOME}/.cache/openchamber"
 )
