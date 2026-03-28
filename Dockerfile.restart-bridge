@@ -1,0 +1,11 @@
+FROM node:20-bullseye-slim
+
+WORKDIR /app
+
+COPY restart-bridge/server.js /app/server.js
+
+ENV PORT=8080
+
+EXPOSE 8080
+
+CMD ["node", "/app/server.js"]

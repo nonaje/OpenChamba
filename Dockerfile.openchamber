@@ -40,7 +40,8 @@ RUN mkdir -p \
     && chown -R openchamber:openchamber /home/openchamber /workspace/projects
 
 COPY openchamber-entrypoint.sh entrypoint-common.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/openchamber-entrypoint.sh /usr/local/bin/entrypoint-common.sh
+COPY patch-openchamber-external-restart.js /usr/local/bin/
+RUN chmod +x /usr/local/bin/openchamber-entrypoint.sh /usr/local/bin/entrypoint-common.sh /usr/local/bin/patch-openchamber-external-restart.js
 
 USER openchamber
 

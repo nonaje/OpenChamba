@@ -82,10 +82,11 @@ Notas utiles:
 
 - `OPENCHAMBER_UI_PASSWORD` solo aplica si tiene un valor no vacio.
 - `HOST_PROJECTS_DIR` puede apuntar a cualquier ruta existente en el host.
+- `COMPOSE_PROJECT_NAME` mantiene estable el nombre del proyecto Compose y le permite al restart bridge identificar el contenedor `opencode` correcto.
 - `OPENCHAMBER_DATA_DIR` cambia la ruta interna donde OpenChamber guarda su configuracion y logs; el stack monta `./data/openchamber/config` en esa ruta.
 - OpenChamber tambien monta `./data/opencode/config` en `~/.config/opencode` y `./data/opencode/share` en `~/.local/share/opencode` para que la UI y el servicio `opencode` usen la misma configuracion efectiva.
 - El contenedor `openchamber` no instala el CLI de OpenCode. Para evitar un preflight de upstream que aun busca `opencode` en `PATH` incluso con `OPENCODE_SKIP_START=true`, el Compose fija `OPENCODE_BINARY=/bin/true`. Eso solo sirve para pasar la validacion inicial; OpenChamber sigue usando el servicio `opencode` separado del stack.
-- El boton `Restart OpenCode and reload configuration` de la UI reinicia el proceso solo cuando OpenChamber administra un OpenCode embebido. En este stack, con `OPENCODE_SKIP_START=true`, OpenChamber trata a OpenCode como externo: el boton vuelve a sondear el backend y refresca el estado de la UI, pero no reinicia el contenedor `opencode`.
+- El stack agrega un servicio interno `restart-bridge` con acceso restringido a Docker para que el boton `Restart OpenCode and reload configuration` de la UI reinicie el contenedor `opencode`, espere su healthcheck y despues refresque el estado de OpenChamber.
 - Si cambias puertos, actualiza `.env` antes de volver a levantar el stack.
 
 Si necesitas ejecutar OpenChamber sin password, deja `OPENCHAMBER_UI_PASSWORD` vacia:
