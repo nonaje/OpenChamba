@@ -43,6 +43,7 @@ La configuracion vive en `.env`. Usa `.env.example` como referencia completa.
 Variables que normalmente vas a tocar:
 
 - `HOST_PROJECTS_DIR`: carpeta del host que se monta en `/workspace`
+- `COMPOSE_PROJECT_NAME`: usa un valor unico por stack si corres multiples instancias en el mismo Docker host
 - `OPENCHAMBER_UI_PASSWORD`: password de la UI; vacia desactiva auth
 - `OPENCHAMBER_PORT`: puerto de la UI
 - `OPENCODE_SERVER_PORT`: puerto de OpenCode
@@ -51,8 +52,10 @@ Variables que normalmente vas a tocar:
 Notas utiles:
 
 - `OPENCODE_SKIP_START=true` hace que OpenChamber use el `opencode` del stack y no intente arrancar uno embebido.
-- `OPENCODE_CONTROL_TOKEN` y `OPENCHAMBER_EXTERNAL_RESTART_TOKEN` protegen el restart bridge.
+- `OPENCODE_CONTROL_TOKEN` es obligatorio y debe ser largo, aleatorio y distinto por stack.
+- `OPENCHAMBER_EXTERNAL_RESTART_TOKEN` protege el restart bridge y normalmente debe reutilizar `OPENCODE_CONTROL_TOKEN`.
 - `OPENCHAMBER_EXTERNAL_RESTART_URL` apunta al bridge interno por defecto; solo cambialo si sabes que necesitas otro endpoint.
+- `TARGET_COMPOSE_PROJECT` es opcional; si lo dejas vacio, el restart bridge autodetecta su proyecto Compose.
 - Si cambias puertos o passwords, recrea los contenedores.
 
 Ejemplo sin password en la UI:
@@ -157,6 +160,8 @@ Comandos utiles de OpenSpec:
 - El stack publica servicios en `127.0.0.1` por defecto.
 - OpenChamber puede protegerse con `OPENCHAMBER_UI_PASSWORD`.
 - Los contenedores corren como usuarios no root.
+- `restart-bridge` requiere un bearer token y aplica timeouts a las llamadas al Docker socket y al request de reinicio iniciado por OpenChamber.
+- Si corres varios stacks, usa un `COMPOSE_PROJECT_NAME` distinto y un `OPENCODE_CONTROL_TOKEN` distinto en cada uno.
 - No hay TLS ni auth adicional para OpenCode en este repo.
 - Si dejas `OPENCHAMBER_UI_PASSWORD=` vacia, usalo solo en local o entornos temporales.
 

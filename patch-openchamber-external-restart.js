@@ -15,18 +15,33 @@ async function restartExternalOpenCodeViaBridge() {
   }
 
   const headers = {};
+  const timeoutMs = Number(process.env.OPENCHAMBER_EXTERNAL_RESTART_TIMEOUT_MS || 15000);
   const token = typeof process.env.OPENCHAMBER_EXTERNAL_RESTART_TOKEN === 'string'
     ? process.env.OPENCHAMBER_EXTERNAL_RESTART_TOKEN.trim()
     : '';
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new Error('OPENCHAMBER_EXTERNAL_RESTART_TIMEOUT_MS must be a positive number');
+  }
   if (token) {
     headers.Authorization = \`Bearer \${token}\`;
   }
 
   console.log(\`Requesting external OpenCode restart via \${restartUrl}...\`);
-  const response = await fetch(restartUrl, {
-    method: 'POST',
-    headers,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort(new Error(\`External OpenCode restart request timed out after \${timeoutMs}ms\`));
+  }, timeoutMs);
+
+  let response;
+  try {
+    response = await fetch(restartUrl, {
+      method: 'POST',
+      headers,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     let details = '';

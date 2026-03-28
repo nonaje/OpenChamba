@@ -13,8 +13,11 @@ const targetPort = Number(process.env.TARGET_PORT || 4096);
 const authToken = (process.env.RESTART_BRIDGE_TOKEN || '').trim();
 const restartTimeoutMs = Number(process.env.RESTART_TIMEOUT_MS || 90000);
 const pollIntervalMs = Number(process.env.RESTART_POLL_INTERVAL_MS || 1000);
+const dockerRequestTimeoutMs = Number(process.env.DOCKER_REQUEST_TIMEOUT_MS || 5000);
+const bridgeContainerId = (process.env.HOSTNAME || '').trim();
 
 let restartInFlight = false;
+let resolvedProjectPromise = null;
 
 function sendJson(res, statusCode, payload) {
   const body = JSON.stringify(payload);
@@ -25,19 +28,25 @@ function sendJson(res, statusCode, payload) {
   res.end(body);
 }
 
-function readRequestBody(req) {
-  return new Promise((resolve, reject) => {
-    let data = '';
-    req.setEncoding('utf8');
-    req.on('data', (chunk) => {
-      data += chunk;
-      if (data.length > 1024 * 1024) {
-        reject(new Error('Request body too large'));
-      }
-    });
-    req.on('end', () => resolve(data));
-    req.on('error', reject);
-  });
+function validateConfig() {
+  if (!authToken) {
+    throw new Error('RESTART_BRIDGE_TOKEN must be set');
+  }
+  if (authToken.length < 16 || /^change-me/i.test(authToken)) {
+    throw new Error('RESTART_BRIDGE_TOKEN must be a strong, non-default secret');
+  }
+  if (!Number.isFinite(targetPort) || targetPort <= 0) {
+    throw new Error('TARGET_PORT must be a valid port number');
+  }
+  if (!Number.isFinite(restartTimeoutMs) || restartTimeoutMs <= 0) {
+    throw new Error('RESTART_TIMEOUT_MS must be a positive number');
+  }
+  if (!Number.isFinite(pollIntervalMs) || pollIntervalMs <= 0) {
+    throw new Error('RESTART_POLL_INTERVAL_MS must be a positive number');
+  }
+  if (!Number.isFinite(dockerRequestTimeoutMs) || dockerRequestTimeoutMs <= 0) {
+    throw new Error('DOCKER_REQUEST_TIMEOUT_MS must be a positive number');
+  }
 }
 
 function checkAuth(req) {
@@ -70,9 +79,38 @@ function dockerRequest(method, path) {
         });
       });
     });
+    req.setTimeout(dockerRequestTimeoutMs, () => {
+      req.destroy(new Error(`Docker request timed out after ${dockerRequestTimeoutMs}ms`));
+    });
     req.on('error', reject);
     req.end();
   });
+}
+
+async function resolveTargetProject() {
+  if (targetProject) {
+    return targetProject;
+  }
+  if (!resolvedProjectPromise) {
+    resolvedProjectPromise = (async () => {
+      if (!bridgeContainerId) {
+        throw new Error('Cannot autodetect Compose project: HOSTNAME is empty');
+      }
+      const details = await inspectContainer(bridgeContainerId);
+      const labels = details.Config && details.Config.Labels ? details.Config.Labels : {};
+      const project = typeof labels['com.docker.compose.project'] === 'string'
+        ? labels['com.docker.compose.project'].trim()
+        : '';
+      if (!project) {
+        throw new Error('Cannot autodetect Compose project from bridge container labels');
+      }
+      return project;
+    })().catch((error) => {
+      resolvedProjectPromise = null;
+      throw error;
+    });
+  }
+  return resolvedProjectPromise;
 }
 
 async function listContainers() {
@@ -99,23 +137,24 @@ async function restartContainer(containerId) {
 }
 
 async function findTargetContainer() {
+  const project = await resolveTargetProject();
   const containers = await listContainers();
   const matches = containers.filter((container) => {
     const labels = container.Labels || {};
     if (labels['com.docker.compose.service'] !== targetService) {
       return false;
     }
-    if (targetProject && labels['com.docker.compose.project'] !== targetProject) {
+    if (project && labels['com.docker.compose.project'] !== project) {
       return false;
     }
     return true;
   });
 
   if (matches.length === 0) {
-    throw new Error(`No container found for service '${targetService}'${targetProject ? ` in project '${targetProject}'` : ''}`);
+    throw new Error(`No container found for service '${targetService}'${project ? ` in project '${project}'` : ''}`);
   }
   if (matches.length > 1) {
-    throw new Error(`Multiple containers found for service '${targetService}'${targetProject ? ` in project '${targetProject}'` : ''}`);
+    throw new Error(`Multiple containers found for service '${targetService}'${project ? ` in project '${project}'` : ''}`);
   }
   return matches[0];
 }
@@ -169,7 +208,6 @@ async function handleRestart(req, res) {
 
   restartInFlight = true;
   try {
-    await readRequestBody(req);
     const container = await findTargetContainer();
     await restartContainer(container.Id);
     await waitForHealthy(container.Id);
@@ -185,10 +223,26 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     if (req.method === 'GET' && url.pathname === '/healthz') {
-      sendJson(res, 200, { ok: true });
+      try {
+        const project = await resolveTargetProject();
+        const container = await findTargetContainer();
+        sendJson(res, 200, {
+          ok: true,
+          project,
+          service: targetService,
+          containerId: container.Id,
+        });
+      } catch (error) {
+        sendJson(res, 503, { error: error.message || 'Bridge not ready' });
+      }
       return;
     }
     if (req.method === 'POST' && url.pathname === '/restart/opencode') {
+      const contentLength = Number(req.headers['content-length'] || 0);
+      if (contentLength > 0 || typeof req.headers['transfer-encoding'] === 'string') {
+        sendJson(res, 413, { error: 'Request body is not supported' });
+        return;
+      }
       await handleRestart(req, res);
       return;
     }
@@ -197,6 +251,8 @@ const server = http.createServer(async (req, res) => {
     sendJson(res, 500, { error: error.message || 'Unexpected error' });
   }
 });
+
+validateConfig();
 
 server.listen(port, '0.0.0.0', () => {
   console.log(`restart-bridge listening on ${port}`);
