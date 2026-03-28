@@ -41,7 +41,8 @@ RUN mkdir -p \
 
 COPY openchamber-entrypoint.sh entrypoint-common.sh /usr/local/bin/
 COPY patch-openchamber-external-restart.js /usr/local/bin/
-RUN chmod +x /usr/local/bin/openchamber-entrypoint.sh /usr/local/bin/entrypoint-common.sh /usr/local/bin/patch-openchamber-external-restart.js
+RUN chmod +x /usr/local/bin/openchamber-entrypoint.sh /usr/local/bin/entrypoint-common.sh /usr/local/bin/patch-openchamber-external-restart.js \
+    && node /usr/local/bin/patch-openchamber-external-restart.js
 
 USER openchamber
 
