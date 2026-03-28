@@ -45,6 +45,7 @@ services:
       OPENCHAMBER_DATA_DIR: ${OPENCHAMBER_DATA_DIR:-/home/openchamber/.config/openchamber}
       OPENCHAMBER_UI_PASSWORD: ${OPENCHAMBER_UI_PASSWORD:-}
       OPENCODE_SKIP_START: ${OPENCODE_SKIP_START:-true}
+      OPENCODE_BINARY: /bin/true
       OPENCODE_HOST: http://opencode:${OPENCODE_SERVER_PORT:-4096}
     extra_hosts:
       - "host.docker.internal:host-gateway"

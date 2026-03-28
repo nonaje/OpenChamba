@@ -1,7 +1,6 @@
 FROM node:20-bullseye-slim
 
 ARG OPENCHAMBER_VERSION=1.9.1
-ARG OPENCODE_VERSION=1.2.27
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -19,11 +18,7 @@ RUN apt-get update \
     && npm --version
 
 RUN npm install -g --prefer-offline \
-    "@openchamber/web@${OPENCHAMBER_VERSION}" \
-    "opencode-ai@${OPENCODE_VERSION}" \
-    "opencode-linux-x64@${OPENCODE_VERSION}" \
-    && mkdir -p /usr/local/node_modules \
-    && cp -R /usr/local/lib/node_modules/opencode-linux-x64 /usr/local/node_modules/opencode-linux-x64
+    "@openchamber/web@${OPENCHAMBER_VERSION}"
 
 RUN groupmod -n openchamber node \
     && usermod -l openchamber -d /home/openchamber -m node
