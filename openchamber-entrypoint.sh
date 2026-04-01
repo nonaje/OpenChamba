@@ -19,7 +19,19 @@ npm --version >/dev/null 2>&1 || {
 OPENCHAMBER_PORT=${OPENCHAMBER_PORT:-3000}
 OPENCHAMBER_HOST=${OPENCHAMBER_HOST:-0.0.0.0}
 OPENCHAMBER_DATA_DIR=${OPENCHAMBER_DATA_DIR:-${HOME}/.config/openchamber}
-export OPENCHAMBER_PORT OPENCHAMBER_HOST OPENCHAMBER_DATA_DIR
+OPENCODE_SERVER_PORT=${OPENCODE_SERVER_PORT:-${OPENCODE_PORT:-${OPENCHAMBER_OPENCODE_PORT:-4096}}}
+
+if [[ -z "${OPENCODE_HOST:-}" ]]; then
+  OPENCODE_HOST="http://opencode:${OPENCODE_SERVER_PORT}"
+elif [[ ! "${OPENCODE_HOST}" =~ ^https?:// ]]; then
+  printf '%s\n' "WARN: OPENCODE_HOST must be an absolute URL (http/https). Falling back to http://opencode:${OPENCODE_SERVER_PORT}" >&2
+  OPENCODE_HOST="http://opencode:${OPENCODE_SERVER_PORT}"
+elif [[ "${OPENCODE_HOST}" =~ ^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:[0-9]+)?/?$ ]]; then
+  printf '%s\n' "WARN: OPENCODE_HOST points to loopback inside the OpenChamber container (${OPENCODE_HOST}). Using http://opencode:${OPENCODE_SERVER_PORT} instead." >&2
+  OPENCODE_HOST="http://opencode:${OPENCODE_SERVER_PORT}"
+fi
+
+export OPENCHAMBER_PORT OPENCHAMBER_HOST OPENCHAMBER_DATA_DIR OPENCODE_SERVER_PORT OPENCODE_HOST
 
 dirs=(
   "/workspace/projects"
@@ -38,10 +50,6 @@ done
 # shellcheck source=entrypoint-common.sh
 source "$(dirname "$0")/entrypoint-common.sh"
 setup_ssh
-
-if [[ -n "${OPENCHAMBER_EXTERNAL_RESTART_URL:-}" ]]; then
-  node /usr/local/bin/patch-openchamber-external-restart.js
-fi
 
 if [[ "$#" -gt 0 ]]; then
   exec "$@"

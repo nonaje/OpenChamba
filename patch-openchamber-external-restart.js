@@ -1,94 +1,118 @@
 #!/usr/bin/env node
 
 const fs = require('fs');
+const path = require('path');
 
-const serverFile = process.env.OPENCHAMBER_SERVER_FILE || '/usr/local/lib/node_modules/@openchamber/web/server/index.js';
-const helperMarker = '/* open-chamba external restart patch */';
+const serverRoot =
+  process.env.OPENCHAMBER_SERVER_ROOT ||
+  '/usr/local/lib/node_modules/@openchamber/web/server';
 
-const helperBlock = `${helperMarker}
-async function restartExternalOpenCodeViaBridge() {
-  const restartUrl = typeof process.env.OPENCHAMBER_EXTERNAL_RESTART_URL === 'string'
-    ? process.env.OPENCHAMBER_EXTERNAL_RESTART_URL.trim()
-    : '';
-  if (!restartUrl) {
-    return false;
+const files = {
+  index: path.join(serverRoot, 'index.js'),
+  proxy: path.join(serverRoot, 'lib/opencode/proxy.js'),
+  lifecycle: path.join(serverRoot, 'lib/opencode/lifecycle.js'),
+};
+
+const lifecycleHelperMarker = '/* open-chamba external restart bridge patch */';
+const proxyHelperMarker = '/* open-chamba proxy base-url patch */';
+
+function fail(message) {
+  console.error(message);
+  process.exit(1);
+}
+
+function readRequiredFile(filePath) {
+  if (!fs.existsSync(filePath)) {
+    fail(`Required OpenChamber file not found: ${filePath}`);
+  }
+  return fs.readFileSync(filePath, 'utf8');
+}
+
+function writePatchedFile(filePath, content) {
+  fs.writeFileSync(filePath, content);
+}
+
+function patchIndex(source) {
+  const existing = 'getRuntime: () => ({\n    openCodePort,\n    openCodeBaseUrl,\n';
+  if (source.includes(existing)) {
+    return source;
   }
 
-  const headers = {};
-  const timeoutMs = Number(process.env.OPENCHAMBER_EXTERNAL_RESTART_TIMEOUT_MS || 15000);
-  const token = typeof process.env.OPENCHAMBER_EXTERNAL_RESTART_TOKEN === 'string'
-    ? process.env.OPENCHAMBER_EXTERNAL_RESTART_TOKEN.trim()
-    : '';
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-    throw new Error('OPENCHAMBER_EXTERNAL_RESTART_TIMEOUT_MS must be a positive number');
-  }
-  if (token) {
-    headers.Authorization = \`Bearer \${token}\`;
+  const anchor = 'getRuntime: () => ({\n    openCodePort,\n    openCodeNotReadySince,\n';
+  if (!source.includes(anchor)) {
+    fail(`Could not find getRuntime anchor in ${files.index}`);
   }
 
-  console.log(\`Requesting external OpenCode restart via \${restartUrl}...\`);
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
-    controller.abort(new Error(\`External OpenCode restart request timed out after \${timeoutMs}ms\`));
-  }, timeoutMs);
+  return source.replace(
+    anchor,
+    'getRuntime: () => ({\n    openCodePort,\n    openCodeBaseUrl,\n    openCodeNotReadySince,\n'
+  );
+}
 
-  let response;
-  try {
-    response = await fetch(restartUrl, {
-      method: 'POST',
-      headers,
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timeoutId);
-  }
+function patchProxy(source) {
+  let patched = source;
 
-  if (!response.ok) {
-    let details = '';
-    try {
-      details = (await response.text()).trim();
-    } catch {
+  if (!patched.includes(proxyHelperMarker)) {
+    const insertAnchor = '  // http-proxy-middleware handles SSE, large bodies, timeouts correctly';
+    if (!patched.includes(insertAnchor)) {
+      fail(`Could not find proxy helper anchor in ${files.proxy}`);
     }
-    throw new Error(
-      details
-        ? \`External OpenCode restart failed (\${response.status}): \${details}\`
-        : \`External OpenCode restart failed with status \${response.status}\`
-    );
+
+    const helperBlock = `  ${proxyHelperMarker}\n  const resolveOpenCodeProxyTarget = (runtimeState) => {\n    if (runtimeState && typeof runtimeState.openCodeBaseUrl === 'string' && runtimeState.openCodeBaseUrl.length > 0) {\n      return runtimeState.openCodeBaseUrl;\n    }\n    return \`http://127.0.0.1:\${runtimeState?.openCodePort || 3902}\`;\n  };\n\n`;
+    patched = patched.replace(insertAnchor, `${helperBlock}${insertAnchor}`);
   }
 
-  return true;
+  const targetBefore = '    target: `http://127.0.0.1:${runtime.openCodePort || 3902}`,';
+  const targetAfter = '    target: resolveOpenCodeProxyTarget(runtime),';
+  if (patched.includes(targetBefore)) {
+    patched = patched.replace(targetBefore, targetAfter);
+  } else if (!patched.includes(targetAfter)) {
+    fail(`Could not patch proxy target in ${files.proxy}`);
+  }
+
+  const routerBefore = `    router: () => {\n      const rt = getRuntime();\n      return \`http://127.0.0.1:\${rt.openCodePort || 3902}\`;\n    },`;
+  const routerAfter = `    router: () => {\n      const rt = getRuntime();\n      return resolveOpenCodeProxyTarget(rt);\n    },`;
+  if (patched.includes(routerBefore)) {
+    patched = patched.replace(routerBefore, routerAfter);
+  } else if (!patched.includes(routerAfter)) {
+    fail(`Could not patch proxy router in ${files.proxy}`);
+  }
+
+  return patched;
 }
 
-`;
+function patchLifecycle(source) {
+  let patched = source;
 
-const branchBefore = `    // For external OpenCode servers, re-probe instead of kill + respawn\n    if (isExternalOpenCode) {\n      console.log('Re-probing external OpenCode server...');\n      const probePort = openCodePort || ENV_CONFIGURED_OPENCODE_PORT || 4096;\n      const probeOrigin = openCodeBaseUrl ?? ENV_CONFIGURED_OPENCODE_HOST?.origin;\n      const healthy = await probeExternalOpenCode(probePort, probeOrigin);\n      if (healthy) {\n        console.log(\`External OpenCode server on port \${probePort} is healthy\`);\n        setOpenCodePort(probePort);\n        isOpenCodeReady = true;\n        lastOpenCodeError = null;\n        openCodeNotReadySince = 0;\n        syncToHmrState();\n      } else {\n        lastOpenCodeError = \`External OpenCode server on port \${probePort} is not responding\`;\n        console.error(lastOpenCodeError);\n        throw new Error(lastOpenCodeError);\n      }\n\n      if (expressApp) {\n        setupProxy(expressApp);\n        ensureOpenCodeApiPrefix();\n      }\n      return;\n    }`;
+  if (!patched.includes(lifecycleHelperMarker)) {
+    const helperAnchor = '  const waitForOpenCodePort = async (timeoutMs = 15000) => {';
+    if (!patched.includes(helperAnchor)) {
+      fail(`Could not find lifecycle helper anchor in ${files.lifecycle}`);
+    }
 
-const branchAfter = `    // For external OpenCode servers, optionally restart via bridge and then re-probe\n    if (isExternalOpenCode) {\n      await restartExternalOpenCodeViaBridge();\n      console.log('Re-probing external OpenCode server...');\n      const probePort = openCodePort || ENV_CONFIGURED_OPENCODE_PORT || 4096;\n      const probeOrigin = openCodeBaseUrl ?? ENV_CONFIGURED_OPENCODE_HOST?.origin;\n      const healthy = await probeExternalOpenCode(probePort, probeOrigin);\n      if (healthy) {\n        console.log(\`External OpenCode server on port \${probePort} is healthy\`);\n        setOpenCodePort(probePort);\n        isOpenCodeReady = true;\n        lastOpenCodeError = null;\n        openCodeNotReadySince = 0;\n        syncToHmrState();\n      } else {\n        lastOpenCodeError = \`External OpenCode server on port \${probePort} is not responding\`;\n        console.error(lastOpenCodeError);\n        throw new Error(lastOpenCodeError);\n      }\n\n      if (expressApp) {\n        setupProxy(expressApp);\n        ensureOpenCodeApiPrefix();\n      }\n      return;\n    }`;
+    const helperBlock = `  ${lifecycleHelperMarker}\n  const restartExternalOpenCodeViaBridge = async () => {\n    const restartUrl = typeof process.env.OPENCHAMBER_EXTERNAL_RESTART_URL === 'string'\n      ? process.env.OPENCHAMBER_EXTERNAL_RESTART_URL.trim()\n      : '';\n    if (!restartUrl) {\n      return false;\n    }\n\n    const timeoutMs = Number(process.env.OPENCHAMBER_EXTERNAL_RESTART_TIMEOUT_MS || 15000);\n    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {\n      throw new Error('OPENCHAMBER_EXTERNAL_RESTART_TIMEOUT_MS must be a positive number');\n    }\n\n    const token = typeof process.env.OPENCHAMBER_EXTERNAL_RESTART_TOKEN === 'string'\n      ? process.env.OPENCHAMBER_EXTERNAL_RESTART_TOKEN.trim()\n      : '';\n    const headers = {};\n    if (token) {\n      headers.Authorization = \`Bearer \${token}\`;\n    }\n\n    console.log(\`Requesting external OpenCode restart via \${restartUrl}...\`);\n    const controller = new AbortController();\n    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);\n\n    let response;\n    try {\n      response = await fetch(restartUrl, {\n        method: 'POST',\n        headers,\n        signal: controller.signal,\n      });\n    } catch (error) {\n      if (error?.name === 'AbortError') {\n        throw new Error(\`External OpenCode restart request timed out after \${timeoutMs}ms\`);\n      }\n      throw error;\n    } finally {\n      clearTimeout(timeoutId);\n    }\n\n    if (response.status === 409) {\n      console.log('External OpenCode restart already in progress; waiting for probe.');\n      return true;\n    }\n\n    if (!response.ok) {\n      let details = '';\n      try {\n        details = (await response.text()).trim();\n      } catch {\n      }\n      throw new Error(\n        details\n          ? \`External OpenCode restart failed (\${response.status}): \${details}\`\n          : \`External OpenCode restart failed with status \${response.status}\`\n      );\n    }\n\n    return true;\n  };\n\n`;
+    patched = patched.replace(helperAnchor, `${helperBlock}${helperAnchor}`);
+  }
 
-const restartAnchor = 'async function restartOpenCode() {';
+  const restartCallBefore = "      if (state.isExternalOpenCode) {\n        console.log('Re-probing external OpenCode server...');";
+  const restartCallAfter = "      if (state.isExternalOpenCode) {\n        await restartExternalOpenCodeViaBridge();\n        console.log('Re-probing external OpenCode server...');";
+  if (patched.includes(restartCallBefore)) {
+    patched = patched.replace(restartCallBefore, restartCallAfter);
+  } else if (!patched.includes(restartCallAfter)) {
+    fail(`Could not patch external restart branch in ${files.lifecycle}`);
+  }
 
-if (!fs.existsSync(serverFile)) {
-  console.error(`OpenChamber server bundle not found at ${serverFile}`);
-  process.exit(1);
+  return patched;
 }
 
-const source = fs.readFileSync(serverFile, 'utf8');
-if (source.includes(helperMarker)) {
-  process.exit(0);
-}
+const indexSource = readRequiredFile(files.index);
+const proxySource = readRequiredFile(files.proxy);
+const lifecycleSource = readRequiredFile(files.lifecycle);
 
-if (!source.includes(restartAnchor)) {
-  console.error(`Could not find restart anchor in ${serverFile}`);
-  process.exit(1);
-}
+const patchedIndex = patchIndex(indexSource);
+const patchedProxy = patchProxy(proxySource);
+const patchedLifecycle = patchLifecycle(lifecycleSource);
 
-if (!source.includes(branchBefore)) {
-  console.error(`Could not find external restart branch in ${serverFile}`);
-  process.exit(1);
-}
-
-const patched = source
-  .replace(restartAnchor, `${helperBlock}${restartAnchor}`)
-  .replace(branchBefore, branchAfter);
-
-fs.writeFileSync(serverFile, patched);
+writePatchedFile(files.index, patchedIndex);
+writePatchedFile(files.proxy, patchedProxy);
+writePatchedFile(files.lifecycle, patchedLifecycle);

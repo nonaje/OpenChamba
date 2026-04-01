@@ -37,7 +37,7 @@ services:
       opencode:
         condition: service_healthy
     environment:
-      PORT: 8080
+      PORT: ${RESTART_BRIDGE_PORT:-8080}
       TARGET_SERVICE: opencode
       TARGET_HOST: opencode
       TARGET_PORT: ${OPENCODE_SERVER_PORT:-4096}
@@ -47,9 +47,9 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     expose:
-      - "8080"
+      - "${RESTART_BRIDGE_PORT:-8080}"
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "const p=Number(process.env.PORT||8080);fetch('http://127.0.0.1:'+p+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -76,7 +76,7 @@ services:
       OPENCODE_SKIP_START: ${OPENCODE_SKIP_START:-true}
       OPENCODE_BINARY: /bin/true
       OPENCODE_HOST: http://opencode:${OPENCODE_SERVER_PORT:-4096}
-      OPENCHAMBER_EXTERNAL_RESTART_URL: http://restart-bridge:8080/restart/opencode
+      OPENCHAMBER_EXTERNAL_RESTART_URL: http://restart-bridge:${RESTART_BRIDGE_PORT:-8080}/restart/opencode
       OPENCHAMBER_EXTERNAL_RESTART_TOKEN: ${OPENCODE_CONTROL_TOKEN:?OPENCODE_CONTROL_TOKEN must be set}
       OPENCHAMBER_EXTERNAL_RESTART_TIMEOUT_MS: ${OPENCHAMBER_EXTERNAL_RESTART_TIMEOUT_MS:-15000}
     extra_hosts:
