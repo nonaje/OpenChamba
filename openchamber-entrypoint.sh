@@ -26,6 +26,9 @@ if [[ -z "${OPENCODE_HOST:-}" ]]; then
 elif [[ ! "${OPENCODE_HOST}" =~ ^https?:// ]]; then
   printf '%s\n' "WARN: OPENCODE_HOST must be an absolute URL (http/https). Falling back to http://opencode:${OPENCODE_SERVER_PORT}" >&2
   OPENCODE_HOST="http://opencode:${OPENCODE_SERVER_PORT}"
+elif [[ "${OPENCODE_HOST}" =~ ^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:[0-9]+)?/?$ ]]; then
+  printf '%s\n' "WARN: OPENCODE_HOST points to loopback inside the OpenChamber container (${OPENCODE_HOST}). Using http://opencode:${OPENCODE_SERVER_PORT} instead." >&2
+  OPENCODE_HOST="http://opencode:${OPENCODE_SERVER_PORT}"
 fi
 
 export OPENCHAMBER_PORT OPENCHAMBER_HOST OPENCHAMBER_DATA_DIR OPENCODE_SERVER_PORT OPENCODE_HOST

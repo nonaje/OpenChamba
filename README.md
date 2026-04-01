@@ -47,11 +47,13 @@ Variables que normalmente vas a tocar:
 - `OPENCHAMBER_UI_PASSWORD`: password de la UI; vacia desactiva auth
 - `OPENCHAMBER_PORT`: puerto de la UI
 - `OPENCODE_SERVER_PORT`: puerto de OpenCode
+- `RESTART_BRIDGE_PORT`: puerto interno del servicio `restart-bridge`
 - `OPENCHAMBER_DOMAIN`, `TRAEFIK_NETWORK`, `TRAEFIK_INSTANCE_NAME`: solo si usas `docker-compose.override.yml` con Traefik
 
 Notas utiles:
 
 - `OPENCODE_SKIP_START=true` hace que OpenChamber use el `opencode` del stack y no intente arrancar uno embebido.
+- `OPENCODE_HOST` en `.env` corresponde al bind host de `opencode` (por ejemplo `0.0.0.0`), no a la URL de proxy de OpenChamber.
 - `OPENCODE_CONTROL_TOKEN` es obligatorio y debe ser largo, aleatorio y distinto por stack.
 - `OPENCHAMBER_EXTERNAL_RESTART_TOKEN` protege el restart bridge y normalmente debe reutilizar `OPENCODE_CONTROL_TOKEN`.
 - `OPENCHAMBER_EXTERNAL_RESTART_URL` apunta al bridge interno por defecto; solo cambialo si sabes que necesitas otro endpoint.
