@@ -61,11 +61,29 @@ async function restartExternalOpenCodeViaBridge() {
 
 `;
 
-const branchBefore = `    // For external OpenCode servers, re-probe instead of kill + respawn\n    if (isExternalOpenCode) {\n      console.log('Re-probing external OpenCode server...');\n      const probePort = openCodePort || ENV_CONFIGURED_OPENCODE_PORT || 4096;\n      const probeOrigin = openCodeBaseUrl ?? ENV_CONFIGURED_OPENCODE_HOST?.origin;\n      const healthy = await probeExternalOpenCode(probePort, probeOrigin);\n      if (healthy) {\n        console.log(\`External OpenCode server on port \${probePort} is healthy\`);\n        setOpenCodePort(probePort);\n        isOpenCodeReady = true;\n        lastOpenCodeError = null;\n        openCodeNotReadySince = 0;\n        syncToHmrState();\n      } else {\n        lastOpenCodeError = \`External OpenCode server on port \${probePort} is not responding\`;\n        console.error(lastOpenCodeError);\n        throw new Error(lastOpenCodeError);\n      }\n\n      if (expressApp) {\n        setupProxy(expressApp);\n        ensureOpenCodeApiPrefix();\n      }\n      return;\n    }`;
-
-const branchAfter = `    // For external OpenCode servers, optionally restart via bridge and then re-probe\n    if (isExternalOpenCode) {\n      await restartExternalOpenCodeViaBridge();\n      console.log('Re-probing external OpenCode server...');\n      const probePort = openCodePort || ENV_CONFIGURED_OPENCODE_PORT || 4096;\n      const probeOrigin = openCodeBaseUrl ?? ENV_CONFIGURED_OPENCODE_HOST?.origin;\n      const healthy = await probeExternalOpenCode(probePort, probeOrigin);\n      if (healthy) {\n        console.log(\`External OpenCode server on port \${probePort} is healthy\`);\n        setOpenCodePort(probePort);\n        isOpenCodeReady = true;\n        lastOpenCodeError = null;\n        openCodeNotReadySince = 0;\n        syncToHmrState();\n      } else {\n        lastOpenCodeError = \`External OpenCode server on port \${probePort} is not responding\`;\n        console.error(lastOpenCodeError);\n        throw new Error(lastOpenCodeError);\n      }\n\n      if (expressApp) {\n        setupProxy(expressApp);\n        ensureOpenCodeApiPrefix();\n      }\n      return;\n    }`;
-
 const restartAnchor = 'async function restartOpenCode() {';
+const externalBranchMatcher = /(\n[ \t]*)if \(isExternalOpenCode\) \{\n([\s\S]*?)\n\1\}/;
+
+function patchExternalRestartBranch(source) {
+  const match = source.match(externalBranchMatcher);
+  if (!match) {
+    return null;
+  }
+
+  const indent = match[1];
+  const blockBody = match[2];
+
+  if (!blockBody.includes('probeExternalOpenCode')) {
+    return null;
+  }
+
+  if (blockBody.includes('restartExternalOpenCodeViaBridge();')) {
+    return source;
+  }
+
+  const replacement = `${indent}if (isExternalOpenCode) {\n${indent}  await restartExternalOpenCodeViaBridge();${blockBody ? `\n${blockBody}` : ''}\n${indent}}`;
+  return source.replace(externalBranchMatcher, `\n${replacement}`);
+}
 
 if (!fs.existsSync(serverFile)) {
   console.error(`OpenChamber server bundle not found at ${serverFile}`);
@@ -77,18 +95,19 @@ if (source.includes(helperMarker)) {
   process.exit(0);
 }
 
-if (!source.includes(restartAnchor)) {
-  console.error(`Could not find restart anchor in ${serverFile}`);
-  process.exit(1);
+let patched = patchExternalRestartBranch(source);
+
+if (!patched) {
+  console.warn(`Could not find a compatible external restart branch in ${serverFile}; skipping patch.`);
+  process.exit(0);
 }
 
-if (!source.includes(branchBefore)) {
-  console.error(`Could not find external restart branch in ${serverFile}`);
-  process.exit(1);
+if (!patched.includes(helperMarker)) {
+  if (patched.includes(restartAnchor)) {
+    patched = patched.replace(restartAnchor, `${helperBlock}${restartAnchor}`);
+  } else {
+    patched = `${helperBlock}${patched}`;
+  }
 }
-
-const patched = source
-  .replace(restartAnchor, `${helperBlock}${restartAnchor}`)
-  .replace(branchBefore, branchAfter);
 
 fs.writeFileSync(serverFile, patched);
