@@ -51,10 +51,6 @@ done
 source "$(dirname "$0")/entrypoint-common.sh"
 setup_ssh
 
-if [[ -n "${OPENCHAMBER_EXTERNAL_RESTART_URL:-}" ]]; then
-  node /usr/local/bin/patch-openchamber-external-restart.js
-fi
-
 if [[ "$#" -gt 0 ]]; then
   exec "$@"
 fi
