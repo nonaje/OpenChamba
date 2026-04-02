@@ -21,12 +21,6 @@ services:
       - ./data/opencode/cache:/home/opencode/.cache/opencode
       - ./data/ssh:/home/opencode/.ssh
       - ${HOST_PROJECTS_DIR:-./projects}:/workspace:delegated
-    healthcheck:
-      test: ["CMD", "node", "-e", "const net=require('net');const port=Number(process.env.OPENCODE_SERVER_PORT||4096);const socket=net.connect({host:'127.0.0.1',port},()=>{socket.end();process.exit(0)});socket.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),3000);"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 15s
     restart: unless-stopped
 
   restart-bridge:
@@ -48,12 +42,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     expose:
       - "${RESTART_BRIDGE_PORT:-8080}"
-    healthcheck:
-      test: ["CMD", "node", "-e", "const p=Number(process.env.PORT||8080);fetch('http://127.0.0.1:'+p+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 5s
     restart: unless-stopped
 
   openchamber:
@@ -90,10 +78,4 @@ services:
       - ./data/opencode/share:/home/openchamber/.local/share/opencode
       - ./data/ssh:/home/openchamber/.ssh
       - ${HOST_PROJECTS_DIR:-./projects}:/workspace:delegated
-    healthcheck:
-      test: ["CMD", "node", "-e", "const net=require('net');const port=Number(process.env.OPENCHAMBER_PORT||3000);const socket=net.connect({host:'127.0.0.1',port},()=>{socket.end();process.exit(0)});socket.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),3000);"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 20s
     restart: unless-stopped
