@@ -40,7 +40,9 @@ dirs=(
   "${HOME}/.local/share/openchamber"
   "${HOME}/.local/share/opencode"
   "${HOME}/.local/state/openchamber"
+  "${HOME}/.local/state/opencode"
   "${HOME}/.cache/openchamber"
+  "${HOME}/.cache/opencode"
 )
 
 for dir in "${dirs[@]}"; do
