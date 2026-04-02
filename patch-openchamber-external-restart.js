@@ -53,8 +53,13 @@ function patchProxy(source) {
   let patched = source;
 
   if (!patched.includes(proxyHelperMarker)) {
-    const insertAnchor = '  // http-proxy-middleware handles SSE, large bodies, timeouts correctly';
-    if (!patched.includes(insertAnchor)) {
+    const insertAnchors = [
+      '  // Generic proxy for non-SSE OpenCode API routes.',
+      '  const apiProxy = createProxyMiddleware({',
+      '  // http-proxy-middleware handles SSE, large bodies, timeouts correctly',
+    ];
+    const insertAnchor = insertAnchors.find((anchor) => patched.includes(anchor));
+    if (!insertAnchor) {
       fail(`Could not find proxy helper anchor in ${files.proxy}`);
     }
 
