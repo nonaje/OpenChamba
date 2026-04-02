@@ -27,9 +27,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.restart-bridge
-    depends_on:
-      opencode:
-        condition: service_healthy
     environment:
       PORT: ${RESTART_BRIDGE_PORT:-8080}
       TARGET_SERVICE: opencode
@@ -49,11 +46,6 @@ services:
       context: .
       dockerfile: Dockerfile.openchamber
     user: "openchamber"
-    depends_on:
-      opencode:
-        condition: service_healthy
-      restart-bridge:
-        condition: service_healthy
     ports:
       - "${OPENCHAMBER_BIND_ADDRESS:-127.0.0.1}:${OPENCHAMBER_PORT:-3000}:${OPENCHAMBER_PORT:-3000}"
     environment:
