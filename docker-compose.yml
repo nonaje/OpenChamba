@@ -41,6 +41,23 @@ services:
       - "${RESTART_BRIDGE_PORT:-8080}"
     restart: unless-stopped
 
+  exec-bridge:
+    build:
+      context: .
+      dockerfile: Dockerfile.exec-bridge
+    environment:
+      PORT: ${EXEC_BRIDGE_PORT:-8081}
+      EXEC_BRIDGE_TOKEN: ${EXEC_BRIDGE_TOKEN:-${OPENCODE_CONTROL_TOKEN:?OPENCODE_CONTROL_TOKEN must be set}}
+      EXEC_BRIDGE_DEFAULT_TIMEOUT_MS: ${EXEC_BRIDGE_DEFAULT_TIMEOUT_MS:-30000}
+      EXEC_BRIDGE_MAX_TIMEOUT_MS: ${EXEC_BRIDGE_MAX_TIMEOUT_MS:-300000}
+      EXEC_BRIDGE_MAX_BODY_BYTES: ${EXEC_BRIDGE_MAX_BODY_BYTES:-65536}
+      EXEC_BRIDGE_MAX_OUTPUT_BYTES: ${EXEC_BRIDGE_MAX_OUTPUT_BYTES:-1048576}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    expose:
+      - "${EXEC_BRIDGE_PORT:-8081}"
+    restart: unless-stopped
+
   openchamber:
     build:
       context: .
@@ -57,7 +74,7 @@ services:
       OPENCODE_BINARY: /bin/true
       OPENCODE_HOST: http://opencode:${OPENCODE_SERVER_PORT:-4096}
       OPENCHAMBER_EXTERNAL_RESTART_URL: http://restart-bridge:${RESTART_BRIDGE_PORT:-8080}/restart/opencode
-      OPENCHAMBER_EXTERNAL_RESTART_TOKEN: ${OPENCODE_CONTROL_TOKEN:?OPENCODE_CONTROL_TOKEN must be set}
+      OPENCHAMBER_EXTERNAL_RESTART_TOKEN: ${OPENCHAMBER_EXTERNAL_RESTART_TOKEN:-${OPENCODE_CONTROL_TOKEN:?OPENCODE_CONTROL_TOKEN must be set}}
       OPENCHAMBER_EXTERNAL_RESTART_TIMEOUT_MS: ${OPENCHAMBER_EXTERNAL_RESTART_TIMEOUT_MS:-15000}
     extra_hosts:
       - "host.docker.internal:host-gateway"

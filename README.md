@@ -9,6 +9,7 @@ Stack Docker para levantar OpenCode y OpenChamber con workspace compartido, pers
 - `opencode`: API de OpenCode publicada por defecto en `127.0.0.1:4096`.
 - `openchamber`: UI web publicada por defecto en `127.0.0.1:3000`.
 - `restart-bridge`: servicio interno para que OpenChamber pueda reiniciar `opencode` y recargar configuracion.
+- `exec-bridge`: API interna separada para ejecutar comandos en contenedores de forma controlada (resolviendo por `container` o por `service`+`project`).
 
 Ambos contenedores comparten:
 
@@ -40,6 +41,8 @@ Accesos por defecto:
 
 La configuracion vive en `.env`. Usa `.env.example` como referencia completa.
 
+Si corres varios stacks por proyecto, puedes partir de `examples/runtime/.env.project.example` y levantar con `docker compose --env-file <archivo> up -d`.
+
 Variables que normalmente vas a tocar:
 
 - `HOST_PROJECTS_DIR`: carpeta del host que se monta en `/workspace`
@@ -48,6 +51,9 @@ Variables que normalmente vas a tocar:
 - `OPENCHAMBER_PORT`: puerto de la UI
 - `OPENCODE_SERVER_PORT`: puerto de OpenCode
 - `RESTART_BRIDGE_PORT`: puerto interno del servicio `restart-bridge`
+- `EXEC_BRIDGE_PORT`: puerto interno del servicio `exec-bridge`
+- `OPENCHAMBER_EXTERNAL_RESTART_TOKEN`: token opcional para OpenChamber hacia el exec-bridge (si queda vacio, reutiliza `OPENCODE_CONTROL_TOKEN`)
+- `OPENCHAMBER_EXTERNAL_RESTART_TIMEOUT_MS`: timeout del request de reinicio desde OpenChamber
 - `OPENCHAMBER_DOMAIN`, `TRAEFIK_NETWORK`, `TRAEFIK_INSTANCE_NAME`: solo si usas `docker-compose.override.yml` con Traefik
 
 Notas utiles:
@@ -55,7 +61,7 @@ Notas utiles:
 - `OPENCODE_SKIP_START=true` hace que OpenChamber use el `opencode` del stack y no intente arrancar uno embebido.
 - `OPENCODE_HOST` en `.env` corresponde al bind host de `opencode` (por ejemplo `0.0.0.0`), no a la URL de proxy de OpenChamber.
 - `OPENCODE_CONTROL_TOKEN` es obligatorio y debe ser largo, aleatorio y distinto por stack.
-- `OPENCHAMBER_EXTERNAL_RESTART_TOKEN` protege el restart bridge y normalmente debe reutilizar `OPENCODE_CONTROL_TOKEN`.
+- `OPENCHAMBER_EXTERNAL_RESTART_TOKEN` protege el exec-bridge y normalmente debe reutilizar `OPENCODE_CONTROL_TOKEN`.
 - `OPENCHAMBER_EXTERNAL_RESTART_URL` apunta al bridge interno por defecto; solo cambialo si sabes que necesitas otro endpoint.
 - `TARGET_COMPOSE_PROJECT` es opcional; si lo dejas vacio, el restart bridge autodetecta su proyecto Compose.
 - Si cambias puertos o passwords, recrea los contenedores.
@@ -136,6 +142,35 @@ opencode
 
 El binario `opencode` ya viene instalado dentro del contenedor `opencode`.
 
+## restart-bridge
+
+OpenChamber no reinicia contenedores directamente: delega en el servicio interno `restart-bridge`, que expone un endpoint HTTP interno para reiniciar `opencode` de forma controlada.
+
+Uso normal en este repo:
+
+- El compose ya conecta `OPENCHAMBER_EXTERNAL_RESTART_URL` al bridge interno.
+- Define un token largo en `OPENCODE_CONTROL_TOKEN`.
+- Si quieres separar credenciales, define `OPENCHAMBER_EXTERNAL_RESTART_TOKEN`; si no, se reutiliza `OPENCODE_CONTROL_TOKEN`.
+- Ajusta `RESTART_BRIDGE_PORT` y `OPENCHAMBER_EXTERNAL_RESTART_TIMEOUT_MS` solo si necesitas afinar red/latencia.
+
+Limites del `restart-bridge` en este stack:
+
+- Solo se usa para reiniciar `opencode`.
+- Requiere bearer token.
+- Opera dentro de la red de Docker Compose (no se publica por puerto host en esta configuracion).
+- Tiene timeouts para llamadas al Docker socket y para el request que dispara OpenChamber.
+
+## exec-bridge API (asincrona)
+
+El servicio `exec-bridge` es independiente de `restart-bridge` y expone ejecucion remota controlada via token bearer obligatorio (`EXEC_BRIDGE_TOKEN`, con fallback a `OPENCODE_CONTROL_TOKEN` en `docker-compose.yml`).
+
+Endpoints principales:
+
+- `POST /v1/exec`: crea un trabajo y responde inmediato `202` con `{ id }`.
+- `GET /v1/exec/:id`: consulta estado y resultados (`stdout`, `stderr`, `exitCode`, `timeout`, `cancelled`).
+- `POST /v1/exec/:id/cancel`: solicita cancelacion de un trabajo en curso.
+- `POST /v1/resolve`: resuelve target por contenedor (`{container}`) o por compose service (`{service, project?}`).
+
 ## OpenSpec y plugins incluidos
 
 El contenedor `opencode` incluye:
@@ -162,7 +197,7 @@ Comandos utiles de OpenSpec:
 - El stack publica servicios en `127.0.0.1` por defecto.
 - OpenChamber puede protegerse con `OPENCHAMBER_UI_PASSWORD`.
 - Los contenedores corren como usuarios no root.
-- `restart-bridge` requiere un bearer token y aplica timeouts a las llamadas al Docker socket y al request de reinicio iniciado por OpenChamber.
+- `exec-bridge` y `restart-bridge` requieren bearer token; ambos aplican timeouts en sus operaciones con Docker.
 - Si corres varios stacks, usa un `COMPOSE_PROJECT_NAME` distinto y un `OPENCODE_CONTROL_TOKEN` distinto en cada uno.
 - No hay TLS ni auth adicional para OpenCode en este repo.
 - Si dejas `OPENCHAMBER_UI_PASSWORD=` vacia, usalo solo en local o entornos temporales.

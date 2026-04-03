@@ -1,0 +1,15 @@
+FROM node:20-bullseye-slim
+
+WORKDIR /app
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends docker.io \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY exec-bridge/server.js /app/server.js
+
+ENV PORT=8081
+
+EXPOSE 8081
+
+CMD ["node", "/app/server.js"]
