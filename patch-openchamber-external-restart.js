@@ -52,6 +52,16 @@ function patchIndex(source) {
 function patchProxy(source) {
   let patched = source;
 
+  const proxyAlreadyPatched =
+    patched.includes('const resolveProxyTarget = () => {') &&
+    patched.includes('runtimeState.openCodeBaseUrl') &&
+    patched.includes('target: resolveProxyTarget(),') &&
+    patched.includes('router: () => resolveProxyTarget(),');
+
+  if (proxyAlreadyPatched) {
+    return patched;
+  }
+
   if (!patched.includes(proxyHelperMarker)) {
     const insertAnchors = [
       '  // Generic proxy for non-SSE OpenCode API routes.',
@@ -71,7 +81,7 @@ function patchProxy(source) {
   const targetAfter = '    target: resolveOpenCodeProxyTarget(runtime),';
   if (patched.includes(targetBefore)) {
     patched = patched.replace(targetBefore, targetAfter);
-  } else if (!patched.includes(targetAfter)) {
+  } else if (!patched.includes(targetAfter) && !patched.includes('target: resolveProxyTarget(),')) {
     fail(`Could not patch proxy target in ${files.proxy}`);
   }
 
@@ -79,7 +89,7 @@ function patchProxy(source) {
   const routerAfter = `    router: () => {\n      const rt = getRuntime();\n      return resolveOpenCodeProxyTarget(rt);\n    },`;
   if (patched.includes(routerBefore)) {
     patched = patched.replace(routerBefore, routerAfter);
-  } else if (!patched.includes(routerAfter)) {
+  } else if (!patched.includes(routerAfter) && !patched.includes('router: () => resolveProxyTarget(),')) {
     fail(`Could not patch proxy router in ${files.proxy}`);
   }
 
