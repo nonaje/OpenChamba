@@ -50,10 +50,14 @@ Variables que normalmente vas a tocar:
 - `OPENCHAMBER_UI_PASSWORD`: password de la UI; vacia desactiva auth
 - `OPENCHAMBER_PORT`: puerto de la UI
 - `OPENCODE_SERVER_PORT`: puerto de OpenCode
+- `OPENCODE_SERVER_PASSWORD`: password HTTP opcional de OpenCode; si se define, OpenChamber y restart-bridge la usan para autenticarse
 - `RESTART_BRIDGE_PORT`: puerto interno del servicio `restart-bridge`
+- `OPENCODE_HEALTH_PATH`: ruta HTTP que `restart-bridge` usa para validar que OpenCode volvió a estar sano
+- `OPENCODE_RESTART_TIMEOUT_MS`: timeout total compartido entre OpenChamber y `restart-bridge` para reinicios de OpenCode
 - `EXEC_BRIDGE_PORT`: puerto interno del servicio `exec-bridge`
-- `OPENCHAMBER_EXTERNAL_RESTART_TOKEN`: token opcional para OpenChamber hacia el exec-bridge (si queda vacio, reutiliza `OPENCODE_CONTROL_TOKEN`)
-- `OPENCHAMBER_EXTERNAL_RESTART_TIMEOUT_MS`: timeout del request de reinicio desde OpenChamber
+- `EXEC_BRIDGE_DEFAULT_TIMEOUT_MS`, `EXEC_BRIDGE_MAX_TIMEOUT_MS`, `EXEC_BRIDGE_MAX_BODY_BYTES`, `EXEC_BRIDGE_MAX_OUTPUT_BYTES`: tuning avanzado del `exec-bridge`
+- `OPENCHAMBER_EXTERNAL_RESTART_TOKEN`: token opcional para OpenChamber hacia el restart-bridge (si queda vacio, reutiliza `OPENCODE_CONTROL_TOKEN`)
+- `OPENCHAMBER_EXTERNAL_RESTART_TIMEOUT_MS`: timeout del request de reinicio desde OpenChamber; por defecto hereda `OPENCODE_RESTART_TIMEOUT_MS`
 - `OPENCHAMBER_DOMAIN`, `TRAEFIK_NETWORK`, `TRAEFIK_INSTANCE_NAME`: solo si usas `docker-compose.override.yml` con Traefik
 
 Notas utiles:
@@ -61,8 +65,10 @@ Notas utiles:
 - `OPENCODE_SKIP_START=true` hace que OpenChamber use el `opencode` del stack y no intente arrancar uno embebido.
 - `OPENCODE_HOST` en `.env` corresponde al bind host de `opencode` (por ejemplo `0.0.0.0`), no a la URL de proxy de OpenChamber.
 - `OPENCODE_CONTROL_TOKEN` es obligatorio y debe ser largo, aleatorio y distinto por stack.
-- `OPENCHAMBER_EXTERNAL_RESTART_TOKEN` protege el exec-bridge y normalmente debe reutilizar `OPENCODE_CONTROL_TOKEN`.
+- `OPENCHAMBER_EXTERNAL_RESTART_TOKEN` protege el restart-bridge y normalmente debe reutilizar `OPENCODE_CONTROL_TOKEN`.
 - `OPENCHAMBER_EXTERNAL_RESTART_URL` apunta al bridge interno por defecto; solo cambialo si sabes que necesitas otro endpoint.
+- `restart-bridge` espera que OpenCode vuelva a responder `GET /global/health` con `healthy=true` antes de dar por exitoso el reinicio.
+- Si defines `OPENCODE_SERVER_PASSWORD`, OpenChamber y restart-bridge la usan para autenticar contra OpenCode.
 - `TARGET_COMPOSE_PROJECT` es opcional; si lo dejas vacio, el restart bridge autodetecta su proyecto Compose.
 - Si cambias puertos o passwords, recrea los contenedores.
 
@@ -152,12 +158,14 @@ Uso normal en este repo:
 - Define un token largo en `OPENCODE_CONTROL_TOKEN`.
 - Si quieres separar credenciales, define `OPENCHAMBER_EXTERNAL_RESTART_TOKEN`; si no, se reutiliza `OPENCODE_CONTROL_TOKEN`.
 - Ajusta `RESTART_BRIDGE_PORT` y `OPENCHAMBER_EXTERNAL_RESTART_TIMEOUT_MS` solo si necesitas afinar red/latencia.
+- Si necesitas cambiar el tiempo maximo de reinicio, ajusta `OPENCODE_RESTART_TIMEOUT_MS` para mantener alineados a OpenChamber y `restart-bridge`.
 
 Limites del `restart-bridge` en este stack:
 
 - Solo se usa para reiniciar `opencode`.
 - Requiere bearer token.
 - Opera dentro de la red de Docker Compose (no se publica por puerto host en esta configuracion).
+- Espera readiness real via `GET /global/health`, no solo apertura del puerto TCP.
 - Tiene timeouts para llamadas al Docker socket y para el request que dispara OpenChamber.
 
 ## exec-bridge API (asincrona)
