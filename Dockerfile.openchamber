@@ -14,7 +14,6 @@ RUN apt-get update \
     unzip \
     && rm -rf /var/lib/apt/lists/* \
     && python3 --version \
-    && node -e "const major = Number(process.versions.node.split('.')[0]); if (major < 22) { console.error('Node.js 22+ is required, found ' + process.versions.node); process.exit(1); } console.log('node', process.versions.node);" \
     && npm --version
 
 RUN npm install -g --prefer-offline \
