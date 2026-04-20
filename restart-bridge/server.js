@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 const http = require('http');
-const net = require('net');
 const { URL } = require('url');
 
 const port = Number(process.env.PORT || 8080);
@@ -15,6 +14,8 @@ const restartTimeoutMs = Number(process.env.RESTART_TIMEOUT_MS || 90000);
 const pollIntervalMs = Number(process.env.RESTART_POLL_INTERVAL_MS || 1000);
 const dockerRequestTimeoutMs = Number(process.env.DOCKER_REQUEST_TIMEOUT_MS || 5000);
 const bridgeContainerId = (process.env.HOSTNAME || '').trim();
+const targetHealthPath = (process.env.TARGET_HEALTH_PATH || '/global/health').trim() || '/global/health';
+const opencodeServerPassword = (process.env.OPENCODE_SERVER_PASSWORD || '').trim();
 
 let restartInFlight = false;
 let resolvedProjectPromise = null;
@@ -55,6 +56,15 @@ function checkAuth(req) {
   }
   const header = req.headers.authorization || '';
   return header === `Bearer ${authToken}`;
+}
+
+function buildOpenCodeAuthHeaders() {
+  if (!opencodeServerPassword) {
+    return {};
+  }
+
+  const credentials = Buffer.from(`opencode:${opencodeServerPassword}`).toString('base64');
+  return { Authorization: `Basic ${credentials}` };
 }
 
 function dockerRequest(method, path) {
@@ -159,24 +169,43 @@ async function findTargetContainer() {
   return matches[0];
 }
 
-function tcpProbe(host, portToProbe, timeoutMs) {
+function probeTargetHealth(timeoutMs) {
   return new Promise((resolve) => {
-    const socket = net.connect({ host, port: portToProbe });
-    let settled = false;
+    const req = http.request({
+      host: targetHost,
+      port: targetPort,
+      path: targetHealthPath,
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        ...buildOpenCodeAuthHeaders(),
+      },
+    }, (res) => {
+      let data = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      res.on('end', () => {
+        if ((res.statusCode || 500) < 200 || (res.statusCode || 500) >= 300) {
+          resolve(false);
+          return;
+        }
 
-    const finish = (result) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      socket.destroy();
-      resolve(result);
-    };
+        try {
+          const payload = JSON.parse(data);
+          resolve(payload && payload.healthy === true);
+        } catch {
+          resolve(false);
+        }
+      });
+    });
 
-    socket.setTimeout(timeoutMs, () => finish(false));
-    socket.on('connect', () => finish(true));
-    socket.on('error', () => finish(false));
-    socket.on('close', () => finish(false));
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error(`Health probe timed out after ${timeoutMs}ms`));
+    });
+    req.on('error', () => resolve(false));
+    req.end();
   });
 }
 
@@ -186,7 +215,7 @@ async function waitForHealthy(containerId) {
     const details = await inspectContainer(containerId);
     const state = details.State || {};
     const health = state.Health || null;
-    const healthy = health ? health.Status === 'healthy' : await tcpProbe(targetHost, targetPort, 1500);
+    const healthy = health ? health.Status === 'healthy' : await probeTargetHealth(1500);
     if (state.Running && healthy) {
       return;
     }
