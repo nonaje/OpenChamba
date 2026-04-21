@@ -57,6 +57,8 @@ RUN mkdir -p \
 
 COPY --from=build /usr/local/lib/node_modules/@openchamber/web /usr/local/lib/node_modules/@openchamber/web
 COPY --from=build /usr/local/bin/openchamber /usr/local/bin/openchamber
+COPY --from=build /usr/local/lib/node_modules/@openchamber/web/bin/cli-entry.js /usr/local/bin/cli-entry.js
+COPY --from=build /usr/local/lib/node_modules/@openchamber/web/bin/cli-output.js /usr/local/bin/cli-output.js
 
 COPY openchamber-entrypoint.sh entrypoint-common.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/openchamber-entrypoint.sh /usr/local/bin/entrypoint-common.sh
