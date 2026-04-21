@@ -21,9 +21,9 @@ ENV PATH=/usr/local/bin:${PATH}
 
 RUN set -eux; \
     case "$TARGETARCH" in \
-      amd64) OPENCODE_PACKAGE="opencode-linux-x64" ;;
-      arm64) OPENCODE_PACKAGE="opencode-linux-arm64" ;;
-      *) echo "Unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;;
+      amd64) OPENCODE_PACKAGE="opencode-linux-x64" ;; \
+      arm64) OPENCODE_PACKAGE="opencode-linux-arm64" ;; \
+      *) echo "Unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
     esac; \
     npm install -g --prefer-offline \
       "${OPENCODE_PACKAGE}@${OPENCODE_VERSION}" \
